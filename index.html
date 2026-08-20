@@ -110,24 +110,35 @@ const CONFIG = {
   dadName: "Dad",
   dadLook: { hair:"#211d1f", skin:"#e0a878", shirt:"#e2d6bc", pants:"#b09566", shoe:"#3a3128", glasses:true },
 
-  // ── Five floors, bottom first. One painting on each wall. ─────────────
-  // scene can be: home, dog, penang, london, graduation, holiday, bike
+  // ── Five floors, bottom first. Up to two paintings per wall. ──────────
+  // scene can be: home, film, dog, penang, durian, london, cookoff,
+  //               kinabalu, graduation, holiday, bike
+  // x places the painting on the 320px-wide wall; keep 4-62 and 258-316
+  // clear for the stairwells.
   floors: [
-    { name:"The Hallway",
-      painting:{ scene:"home", title:"The House",
-                 caption:"You picked it. You fixed it. You kept it standing." } },
-    { name:"The Living Room",
-      painting:{ scene:"dog", title:"Keifer at Sunset",
-                 caption:"Best seat in the house, and he knows it." } },
-    { name:"The Study",
-      painting:{ scene:"penang", title:"Penang",
-                 caption:"The family trip to Penang. You ordered for the whole table, and you were right every time." } },
-    { name:"The Music Room",
-      painting:{ scene:"london", title:"London, Canada",
-                 caption:"Dropping Oliver off in London. The car was quieter the whole way home." } },
-    { name:"The Landing",
-      painting:{ scene:"graduation", title:"Graduation Day",
-                 caption:"You clapped the loudest. You always do." } },
+    { name:"The Hallway", paintings:[
+      { scene:"home", x:64, title:"The House",
+        caption:"You picked it. You fixed it. You kept it standing." },
+      { scene:"film", x:100, title:"The Film Shoot",
+        caption:"One roll of film. Two naturals." } ] },
+    { name:"The Living Room", paintings:[
+      { scene:"dog", x:118, title:"Keifer at Sunset",
+        caption:"Best seat in the house, and he knows it." } ] },
+    { name:"The Study", paintings:[
+      { scene:"penang", x:131, title:"Penang",
+        caption:"The family trip to Penang. You ordered for the whole table, and you were right every time." },
+      { scene:"durian", x:163, title:"Durian in Sri Lanka",
+        caption:"Roadside durian in Sri Lanka. Some of us enjoyed it more than others." } ] },
+    { name:"The Music Room", paintings:[
+      { scene:"london", x:176, title:"London, Canada",
+        caption:"Dropping Oliver off in London. The car was quieter the whole way home." },
+      { scene:"cookoff", x:232, title:"The Cookoff",
+        caption:"South Africa. The aprons said LAI FAMILY, and the captain was obvious." } ] },
+    { name:"The Landing", paintings:[
+      { scene:"kinabalu", x:112, title:"Mount Kinabalu",
+        caption:"Sunrise at the summit. You got us all the way up." },
+      { scene:"graduation", x:216, title:"Graduation Day",
+        caption:"You clapped the loudest. You always do." } ] },
   ],
 
   kitchenName: "The Kitchen",
@@ -491,6 +502,78 @@ function scene(id, ox, oy, s) {
     P(13,7,3,1,"#241c1a"); P(13,8,3,2,"#e8b98d"); P(13,10,3,4,"#2c3350"); P(13,14,3,2,"#23232b");
     P(18,7,3,1,"#1d1a1c"); P(18,8,3,2,"#e2ab7d"); P(18,10,3,4,"#5a7ba8"); P(18,14,3,2,"#4a6a94");
     P(21,9,1,2,"#e2ab7d");                                   // the thumbs up
+  } else if (id === "durian") {
+    // roadside durian in Sri Lanka: jungle, road, Dad holding the spiky thing
+    P(0,0,26,8,"#2e5a34");
+    P(2,1,3,2,"#3f7a44"); P(8,0,4,3,"#25502c"); P(13,1,3,2,"#3f7a44"); P(21,0,4,3,"#25502c");
+    P(5,2,1,4,"#5a4632"); P(19,3,1,3,"#5a4632");
+    P(10,3,4,2,"#8fae4a"); P(23,4,2,2,"#8fae4a");
+    P(15,5,7,3,"#993528"); P(15,5,7,1,"#b04432");             // the red shack
+    P(0,8,26,4,"#7a7f84"); P(0,8,26,1,"#8f959a");             // the road
+    P(2,10,3,1,"#c9cfd0"); P(11,10,3,1,"#c9cfd0"); P(20,10,3,1,"#c9cfd0");
+    P(0,12,26,6,"#8a8276"); P(0,12,26,1,"#9a9286");           // under the stall
+    // oliver (thumbs up), eunice, dad with the durian, mum in her hat
+    P(2,7,3,1,"#1d1a1c");  P(2,8,3,2,"#e2ab7d");  P(2,10,3,4,"#efe6cc"); P(2,14,3,2,"#5a5f66");
+    P(5,6,1,2,"#e2ab7d");
+    P(7,6,3,2,"#241c1a");  P(7,8,3,2,"#e8b98d");  P(7,10,3,4,"#37405c"); P(7,14,3,2,"#7a8494");
+    P(13,6,3,1,"#211d1f"); P(13,7,3,2,"#e0a878"); P(13,9,3,4,"#2e2e34"); P(13,13,3,2,"#3a3a42");
+    P(13,15,3,1,"#e0a878");
+    P(16,9,3,3,"#b8a838"); P(16,8,1,1,"#8a7c2a"); P(18,8,1,1,"#8a7c2a");
+    P(17,9,1,1,"#8a7c2a"); P(16,11,1,1,"#8a7c2a"); P(17,10,1,1,"#f4e6a0");
+    P(20,5,3,2,"#c9a86a"); P(19,6,5,1,"#b8965a");             // the straw hat
+    P(20,7,3,2,"#e8b98d"); P(20,9,4,5,"#35a874"); P(20,14,3,2,"#8a8276");
+  } else if (id === "cookoff") {
+    // the South Africa cookoff: LAI FAMILY aprons, the patterned table
+    P(0,0,26,3,"#ece6da"); P(0,2,26,1,"#d8d2c4");
+    P(0,3,26,10,"#cfc4ae");
+    P(2,4,3,2,"#5a5348"); P(7,4,4,3,"#5a5348"); P(8,5,2,1,"#8a8276"); P(19,4,3,2,"#5a5348");
+    P(23,4,3,4,"#b8d0dc");                                    // window
+    // little Oliver, Mum, Dad in his cap, young Eunice — all in aprons
+    P(3,7,3,1,"#1d1a1c");  P(3,8,3,2,"#e2ab7d");  P(3,10,3,3,"#c9b18a");
+    P(8,6,3,1,"#2a2124");  P(8,7,3,2,"#e8b98d");  P(8,9,3,4,"#c9b18a");
+    P(13,5,3,2,"#2e3440"); P(13,7,3,2,"#e0a878"); P(13,9,3,4,"#c9b18a");
+    P(18,5,3,2,"#241c1a"); P(17,7,1,3,"#241c1a"); P(21,7,1,3,"#241c1a");
+    P(18,7,3,2,"#e8b98d"); P(18,9,3,4,"#c9b18a");
+    P(9,10,1,1,"#8a7452"); P(14,10,1,1,"#8a7452"); P(19,10,1,1,"#8a7452"); // apron print
+    P(1,10,6,3,"#9a6f38"); P(1,10,6,1,"#b08448");             // the wicker basket
+    P(2,11,1,2,"#7d5a2c"); P(4,11,1,2,"#7d5a2c"); P(6,11,1,2,"#7d5a2c");
+    // the shell-print tablecloth, board and bowl
+    P(0,13,26,5,"#e8e2d6");
+    P(2,14,3,2,"#b03028"); P(8,15,3,2,"#2a2a2e"); P(14,14,3,2,"#b03028"); P(20,15,3,2,"#2a2a2e");
+    P(3,16,1,1,"#e8e2d6"); P(15,16,1,1,"#e8e2d6");
+    P(10,13,5,1,"#3a6ac8"); P(17,12,4,1,"#c9ced4");
+  } else if (id === "film") {
+    // the film shoot: black and white, the bench, the two of them laughing
+    P(0,0,26,13,"#d4cfc8");
+    P(4,1,1,10,"#c4bfb8"); P(12,0,1,12,"#c4bfb8"); P(20,2,1,9,"#c4bfb8");
+    P(0,13,26,5,"#c9c4bc"); P(0,13,26,1,"#bab5ac");
+    P(3,12,14,1,"#4a4440"); P(4,13,1,3,"#4a4440"); P(15,13,1,3,"#4a4440");
+    // Eunice on the bench, looking up
+    P(5,6,3,2,"#1a1a1a"); P(4,8,1,3,"#1a1a1a"); P(8,7,1,2,"#1a1a1a");
+    P(5,8,3,1,"#d8d2c8");
+    P(5,9,3,3,"#222222"); P(5,12,4,1,"#8a887f"); P(8,12,2,3,"#8a887f");
+    P(9,15,2,1,"#e8e4dc");
+    // Dad standing, foot up on the bench
+    P(16,3,3,2,"#1a1a1a"); P(16,5,3,2,"#cfc9c0"); P(16,5,3,1,"#3a3a3a");
+    P(16,7,4,4,"#242424"); P(14,9,2,1,"#242424");
+    P(14,10,2,1,"#8a887f"); P(13,11,2,1,"#e8e4dc");
+    P(18,11,2,5,"#8a887f"); P(18,16,3,1,"#e8e4dc");
+  } else if (id === "kinabalu") {
+    // sunrise on the summit: the three climbers above the clouds
+    P(0,0,26,3,"#7a8ba8"); P(0,3,26,2,"#a8a8b8");
+    P(2,1,6,1,"#c9ccd8"); P(14,2,7,1,"#c9ccd8");
+    P(0,5,26,2,"#d8a86a"); P(0,7,26,2,"#f0c05a"); P(0,9,26,1,"#e8873a");
+    P(10,5,6,4,"#ffe9a0"); P(12,4,2,1,"#ffe9a0");             // the sun
+    P(0,10,26,8,"#3a3f4a"); P(0,10,26,1,"#4a505c");           // the rock
+    P(6,11,3,1,"#2e323c"); P(18,12,4,1,"#2e323c");
+    // eunice hooded, oliver, dad in the tan puffer
+    P(3,5,4,2,"#2a3350"); P(4,6,2,1,"#d8a888");
+    P(3,7,4,5,"#2a3350"); P(3,12,4,3,"#22283c");
+    P(10,4,3,1,"#1d1a1c"); P(10,5,3,2,"#e2ab7d");
+    P(10,7,3,5,"#323c5c"); P(10,12,3,3,"#2a3040");
+    P(17,4,3,1,"#22283a"); P(17,5,3,2,"#e0a878");
+    P(16,7,5,5,"#c9b596"); P(16,9,5,1,"#b8a486"); P(18,8,1,3,"#4a7a5c");
+    P(17,12,3,3,"#2e3442");
   } else if (id === "bike") {
     P(0,0,26,3,"#e0995f"); P(0,3,26,2,"#eeb977"); P(0,5,26,2,"#f7d79a");
     P(21,1,4,4,"#fff3c0");
@@ -527,12 +610,13 @@ const upArch   = i => arches.find(a => a.floor === i && a.up);
 const downArch = i => arches.find(a => a.floor === i && !a.up);
 
 const FR_W = ART_W + 2, FR_H = ART_H + 2;
-// every floor keeps x 4-62 and 258-320 clear for the stairwell arches
-const PAINT_X = [100, 118, 140, 176, 112];
-const paintings = CONFIG.floors.map((f, i) => ({
-  scene:f.painting.scene, title:f.painting.title, caption:f.painting.caption,
-  floor:i, seen:false, x:PAINT_X[i], y:groundY(i) - 52,
-}));
+const paintings = [];
+CONFIG.floors.forEach((f, i) => {
+  const list = f.paintings || (f.painting ? [f.painting] : []);
+  for (const p of list)
+    paintings.push({ scene:p.scene, title:p.title, caption:p.caption,
+                     floor:i, seen:false, x:p.x, y:groundY(i) - 52 });
+});
 
 const KY = groundY(TOP);
 const TABLE = { x:96, y:KY-22, w:72, h:4 };
@@ -993,8 +1077,8 @@ function drawMusic(gy, ty) {
   px(220, gy-30, 2, 22, "#7a6a56"); px(214, gy-8, 14, 2, "#7a6a56");    // guitar on its stand
   px(216, gy-26, 10, 12, "#c07a44"); px(219, gy-23, 4, 4, "#5a3a26");
   px(220, gy-38, 2, 12, "#8a6440"); px(219, gy-40, 4, 3, "#3a2f26");
-  px(238, gy-50, 14, 14, "#e8e2d0"); px(240, gy-48, 10, 10, "#3a3a44");  // wall clock
-  px(244, gy-46, 1, 5, "#e8e2d0"); px(244, gy-43, 4, 1, "#e8e2d0");
+  px(96, gy-56, 14, 14, "#e8e2d0"); px(98, gy-54, 10, 10, "#3a3a44");    // wall clock
+  px(102, gy-52, 1, 5, "#e8e2d0"); px(102, gy-49, 4, 1, "#e8e2d0");
   ctx.globalAlpha = 0.11; px(64, gy-46, 90, 46, C.warm); ctx.globalAlpha = 1;
 }
 function drawLanding(gy, ty) {
@@ -1002,7 +1086,6 @@ function drawLanding(gy, ty) {
   px(76, gy-24, 12, 8, "#c07a4c");
   px(74, gy-32, 3, 9, "#4a9a68"); px(80, gy-36, 3, 13, "#6cbf8a"); px(86, gy-31, 3, 8, "#4a9a68");
   drawWindow(158, ty+10, 40, 28, 4);
-  smallFrame(214, gy-38, 16, 14); smallFrame(236, gy-32, 14, 12); smallFrame(216, gy-20, 12, 10);
   px(66, gy-3, 40, 3, "#8a5a4a");
 }
 function drawKitchen(gy, ty) {
