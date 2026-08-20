@@ -701,13 +701,13 @@ const nearDesk = () => dad.floor === 2 && dad.onGround &&
 function startWork() {
   state.working = true;
   keys.left = keys.right = false;
-  dad.x = 206; dad.y = groundY(2) - 22 - P_H;   // up onto the desk
+  dad.x = 203; dad.y = groundY(2) - 31;          // onto the chair, facing the screen
   dad.vy = 0; dad.onGround = true; dad.flip = false;
   sfx.jump();
 }
 function stopWork() {
   state.working = false;
-  dad.x = 181; dad.flip = true;                  // hop off the left edge
+  dad.x = 193; dad.flip = true;                  // hop off the chair
   dad.vy = -95; dad.onGround = false;
   sfx.jump();
 }
@@ -1164,8 +1164,8 @@ function drawStudy(gy, ty) {
     }
   }
   px(186, gy-22, 66, 4, "#8a5a3c"); px(188, gy-18, 4, 18, "#6a4530"); px(246, gy-18, 4, 18, "#6a4530");
-  px(206, gy-14, 16, 3, "#3f4657"); px(206, gy-28, 3, 14, "#3f4657");
-  px(208, gy-11, 3, 11, "#2f3547"); px(218, gy-11, 3, 11, "#2f3547");
+  px(205, gy-17, 17, 3, "#3f4657"); px(203, gy-31, 3, 17, "#3f4657");
+  px(207, gy-14, 3, 14, "#2f3547"); px(217, gy-14, 3, 14, "#2f3547");
   // the computer
   px(226, gy-42, 24, 18, "#23262f"); px(226, gy-42, 24, 1, "#3a3f4c");
   px(228, gy-40, 20, 13, state.working ? "#1d3247" : "#141a24");
@@ -1275,10 +1275,32 @@ function drawCake(t) {
     ctx.globalAlpha = 0.13; px(CAKE_X+c-4, CAKE_Y-5, 10, 15, C.warm); ctx.globalAlpha = 1;
   }
 }
+function drawDadSeated(t) {
+  const gy = groundY(2), x = 203, m = CONFIG.dadLook;
+  const tap = Math.sin(t*11) > 0 ? 0 : 1;
+  drawPerson(HEAD_M.concat(TORSO_IDLE), x, gy-31 + tap, m, false);
+  px(x+4, gy-17, 9, 3, m.pants);                 // thighs under the desk
+  px(x+10, gy-14, 3, 11, m.pants);
+  px(x+10, gy-3, 5, 3, m.shoe);
+}
+// redrawn over him while seated, so the desk is in front of his chest
+function drawDeskFront() {
+  const gy = groundY(2);
+  px(186, gy-22, 66, 4, "#8a5a3c");
+  px(204, gy-24, 18, 2, "#3a3f4c");
+  px(190, gy-25, 12, 3, "#f2eee2"); px(193, gy-28, 9, 3, "#dfe4ea");
+}
 function drawDad(t) {
+  if (state.working) {
+    drawDadSeated(t);
+    drawDeskFront();
+    // hands tapping on the keyboard, in front of the desk
+    const tap = Math.sin(t*11) > 0 ? 0 : 1;
+    px(212, groundY(2) - 26 + tap, 7, 2, CONFIG.dadLook.skin);
+    return;
+  }
   let sp = SPR.m_idle;
   if (state.mode === "party" || state.mode === "message") sp = SPR.m_cheer;
-  else if (state.working) sp = Math.sin(state.t*11) > 0 ? SPR.m_type1 : SPR.m_type2;
   else if (state.open) sp = SPR.m_look;
   else if (!dad.onGround) sp = SPR.m_jump;
   else if (dad.vx !== 0) sp = (dad.anim|0) % 2 ? SPR.m_w1 : SPR.m_w2;
