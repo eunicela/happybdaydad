@@ -485,6 +485,10 @@ const state = { mode:"title", t:0, candles:false, surpriseT:0, partyT:0, fade:0,
                 open:null, openT:0, camLockX:null, climb:null };
 const cam = { x:0, y:WORLD_H - 280 };
 
+// the kitchen stays an unreadable mosaic until he arrives — no spoilers
+const mystery = { t:0, cv:document.createElement("canvas") };
+const mysteryCtx = mystery.cv.getContext("2d");
+
 function nearArch() {
   if (!dad.onGround || dad.floor >= TOP) return null;
   const a = upArch(dad.floor);
@@ -984,7 +988,7 @@ function drawHud(dt) {
     // float it above his head — the bottom of the screen belongs to the buttons
     if (prompt) {
       const sx = clamp(dad.x + P_W/2 - cam.x, textW(prompt)/2 + 4, VIEW_W - textW(prompt)/2 - 4);
-      const sy = clamp(dad.y - cam.y - 15, 22, VIEW_H - 120);
+      const sy = clamp(dad.y - cam.y - 30, 22, VIEW_H - 120);
       const w = textW(prompt) + 8;
       ctx.globalAlpha = 0.8; px(sx - w/2, sy - 2, w, 12, "#0d0b16"); ctx.globalAlpha = 1;
       drawText(prompt, sx, sy, C.gold, "center");
@@ -1119,6 +1123,24 @@ function frame(now) {
     ctx.globalAlpha = d; px(-4, y0, ROOM_W+8, hh, "#0a0c1c"); ctx.globalAlpha = 1;
   }
   ctx.restore();
+
+  // mosaic out the kitchen until he steps out of the last stairwell,
+  // then dissolve it sharp over a second
+  mystery.t = clamp(mystery.t + (visited >= TOP ? dt / 1.1 : 0), 0, 1);
+  if (mystery.t < 1) {
+    const block = Math.max(2, Math.round(lerp(8, 1, mystery.t)));
+    const y0 = clamp(Math.round(roomTop(TOP) - ROOF - cam.y), 0, VIEW_H);
+    const y1 = clamp(Math.round(groundY(TOP) + SLAB - cam.y), 0, VIEW_H);
+    const h = y1 - y0;
+    if (h > 4) {
+      mystery.cv.width  = Math.ceil(VIEW_W / block);
+      mystery.cv.height = Math.ceil(h / block);
+      mysteryCtx.imageSmoothingEnabled = true;   // average down = soft
+      mysteryCtx.drawImage(cv, 0, y0, VIEW_W, h, 0, 0, mystery.cv.width, mystery.cv.height);
+      ctx.imageSmoothingEnabled = false;         // blow up = chunky
+      ctx.drawImage(mystery.cv, 0, 0, mystery.cv.width, mystery.cv.height, 0, y0, VIEW_W, h);
+    }
+  }
 
   const warmth = clamp(visited/TOP, 0, 1);
   if (warmth > 0.01) { ctx.globalAlpha = 0.05*warmth; px(0,0,VIEW_W,VIEW_H,C.warm); ctx.globalAlpha = 1; }
