@@ -138,7 +138,7 @@ const CONFIG = {
     { name:"Oliver", hair:"#1d1a1c", skin:"#e2ab7d", shirt:"#5c626e", pants:"#8a7550", shoe:"#3a3128", glasses:true },
     { name:"Eunice", hair:"#241c1a", skin:"#e8b98d", shirt:"#b5546e", pants:"#2e2c33", shoe:"#3a3128", long:true },
   ],
-  dog: true,
+  dog: { name:"Keifer" },
 
   // ── The TV in the living room ─────────────────────────────────────────
   // Interacting with it plays this YouTube video on a close-up of the set.
@@ -148,14 +148,12 @@ const CONFIG = {
   surprise: "SURPRISE!",
 
   // ── The message, once the candles are out ─────────────────────────────
-  finaleTitle: "Happy Birthday, Dad",
+  finaleTitle: "Happy Birthday, Dad!",
   finaleLines: [
-    "You built this whole house",
-    "around us.",
-    "",
-    "Thanks for every floor of it.",
+    "Thank you for everything",
+    "you do for the Lai family.",
   ],
-  signature: "— Mum, Oliver & Eunice",
+  signature: "— Mum, Oliver, Eunice & Keifer",
 
   music: true,
 };
@@ -501,7 +499,8 @@ const KY = groundY(TOP);
 const TABLE = { x:96, y:KY-22, w:72, h:4 };
 const CAKE_X = TABLE.x + 29, CAKE_Y = TABLE.y - 16;
 const family = CONFIG.family.map((m, i) => ({ ...m, x:[54,72,90][i], faceLeft:false, bob:i*1.1 }));
-const dogPos = { x:116, y:KY-14 };
+const dogPos = { x:206, y:KY-14 };   // waiting by the stairwell to greet him
+const hearts = [];
 
 // ────────────────────────────────────────────────────────────── the guy ──
 const dad = { x:34, y:groundY(0)-P_H, vx:0, vy:0, onGround:true, flip:false, anim:0, floor:0 };
@@ -554,6 +553,8 @@ const nearCake = () => dad.floor === TOP && dad.onGround &&
                        Math.abs((dad.x + P_W/2) - (CAKE_X + 9)) < 28;
 const nearTV = () => !!CONFIG.tv && dad.floor === 1 && dad.onGround &&
                      Math.abs((dad.x + P_W/2) - 223) < 26;
+const nearDog = () => !!CONFIG.dog && dad.floor === TOP && dad.onGround &&
+                      Math.abs((dad.x + P_W/2) - (dogPos.x + 7)) < 18;
 
 // ───────────────────────────────────────────────────────────────── input ──
 const keys = { left:false, right:false };
@@ -669,6 +670,7 @@ function action() {
     if (a) { goUp(a); return; }
     if (nearTV()) { openTV(); return; }
     if (nearCake() && !state.candles) { blowOut(); return; }
+    if (nearDog()) { petDog(); return; }
     if (dad.onGround) { dad.onGround = false; dad.vy = JUMP_V; sfx.jump(); }
     return;
   }
@@ -715,6 +717,28 @@ function openTV() {
   document.getElementById("tvcap").textContent = CONFIG.tv.caption || "";
   document.getElementById("tv").classList.remove("hide");
   sfx.chime();
+}
+function petDog() {
+  for (let i = 0; i < 3; i++)
+    hearts.push({ x: dogPos.x + 3 + i*5, y: dogPos.y - 4 - i*2, t: 0, drift: (i-1)*4 });
+  if (audio.ctx) {                                  // a happy little "arf arf"
+    const t = audio.ctx.currentTime;
+    note(520, t, 0.06, 0.06, "square"); note(390, t + 0.08, 0.09, 0.05, "square");
+    note(560, t + 0.22, 0.06, 0.05, "square");
+  }
+}
+function drawHearts(dt) {
+  for (let i = hearts.length - 1; i >= 0; i--) {
+    const h = hearts[i];
+    h.t += dt;
+    if (h.t > 1.4) { hearts.splice(i, 1); continue; }
+    const x = Math.round(h.x + Math.sin(h.t * 5) * 2 + h.drift * h.t);
+    const y = Math.round(h.y - h.t * 16);
+    ctx.globalAlpha = clamp(1.6 - h.t, 0, 1);
+    px(x, y, 1, 1, C.pink); px(x+2, y, 1, 1, C.pink);
+    px(x-1, y+1, 5, 1, C.pink); px(x, y+2, 3, 1, C.pink); px(x+1, y+3, 1, 1, C.pink);
+    ctx.globalAlpha = 1;
+  }
 }
 function closeTV() {
   state.tvOpen = false;
@@ -1072,7 +1096,8 @@ function drawHud(dt) {
     const prompt = p ? (p.seen ? "▲ look again" : "▲ look")
                  : nearArch() ? "▲ go up"
                  : nearTV() ? "▲ turn on the tv"
-                 : (nearCake() && !state.candles ? "▲ light the candles" : null);
+                 : (nearCake() && !state.candles) ? "▲ light the candles"
+                 : nearDog() ? "▲ pet " + CONFIG.dog.name : null;
     document.getElementById("ba").classList.toggle("hint", !!prompt);
     // float it above his head — the bottom of the screen belongs to the buttons
     if (prompt) {
@@ -1125,11 +1150,13 @@ function drawMessage(dt) {
   ctx.globalAlpha = clamp((state.fade-0.25)/0.6, 0, 1);
   const lines = [];
   for (const l of CONFIG.finaleLines) l === "" ? lines.push("") : lines.push(...wrap(l, VIEW_W-20));
-  let y = Math.round((VIEW_H - (42 + lines.length*LINE_H))/2) - 12;
+  const sig = wrap(CONFIG.signature, VIEW_W-16);
+  let y = Math.round((VIEW_H - (42 + (lines.length + sig.length)*LINE_H))/2) - 12;
   drawText(CONFIG.finaleTitle, VIEW_W/2, y, C.gold, "center"); y += 20;
   for (const l of lines) { drawText(l, VIEW_W/2, y, C.ink, "center"); y += LINE_H; }
   y += 10;
-  drawText(CONFIG.signature, VIEW_W/2, y, C.pink, "center");
+  for (const l of sig) { drawText(l, VIEW_W/2, y, C.pink, "center"); y += LINE_H; }
+  y -= LINE_H;
   drawSprite(CAKE, (VIEW_W-18)/2, y+16, CAKE_PAL, false);
   for (let i = 0; i < CANDLE_X.length; i++) {
     const f = Math.sin(state.t*9 + i*2) > 0 ? 0 : 1;
@@ -1203,6 +1230,7 @@ function frame(now) {
   drawCake(state.t);
   drawFamily(state.t);
   drawDad(state.t);
+  drawHearts(dt);
   drawConfetti(dt);
   for (let i = 0; i < FLOORS; i++) {
     const d = darkness(i);
