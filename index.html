@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#11101c">
-<title>Happy Birthday, Dad</title>
+<title>The Lai House</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body {
@@ -128,6 +128,7 @@
 
 const CONFIG = {
 
+  gameTitle: "The Lai House",     // title screen — no birthday spoilers
   dadName: "Dad",
   dadLook: { hair:"#211d1f", skin:"#e0a878", shirt:"#e2d6bc", pants:"#b09566", shoe:"#3a3128", glasses:true },
 
@@ -249,6 +250,8 @@ const TORSO_IDLE = ["..SSSSSSSS..",".sSSSSSSSSs.",".sSSSSSSSSs.","..SSSSSSSS..",
 const TORSO_UP   = [".s.SSSSSS.s.",".s.SSSSSS.s.","...SSSSSS...","..SSSSSSSS..","..SSSSSSSS.."];
 const TORSO_CHEER= ["s..SSSSSS..s","s..SSSSSS..s","...SSSSSS...","..SSSSSSSS..","..SSSSSSSS.."];
 const TORSO_LOOK = ["..SSSSSSSS..",".sSSSSSSSS..",".sSSSSSSSS..","..SSSSSSSS..","..SSSSSSSS.."];
+const TORSO_TYPE1= ["..SSSSSSSS..","..SSSSSSSSs.","..SSSSSSSSs.","..SSSSSSSS..","..SSSSSSSS.."];
+const TORSO_TYPE2= ["..SSSSSSSS..","..SSSSSSSS..","..SSSSSSSSss","..SSSSSSSS..","..SSSSSSSS.."];
 const body = (h, t, l) => h.concat(t, l);
 const SPR = {
   m_idle: body(HEAD_M, TORSO_IDLE, LEGS_STAND),
@@ -257,6 +260,8 @@ const SPR = {
   m_jump: body(HEAD_M, TORSO_UP,   LEGS_JUMP),
   m_cheer:body(HEAD_M, TORSO_CHEER,LEGS_STAND),
   m_look: body(HEAD_M, TORSO_LOOK, LEGS_STAND),
+  m_type1:body(HEAD_M, TORSO_TYPE1,LEGS_STAND),
+  m_type2:body(HEAD_M, TORSO_TYPE2,LEGS_STAND),
   f_idle: body(HEAD_F, TORSO_IDLE, LEGS_STAND),
   f_cheer:body(HEAD_F, TORSO_CHEER,LEGS_STAND),
 };
@@ -662,12 +667,12 @@ function movePlayer(dt) {
 }
 
 // ────────────────────────────────────────────────────────── game state ──
-let visited = 0, stepTimer = 0;
+let visited = 0, stepTimer = 0, typeTimer = 0;
 const lightsOn = [0,0,0,0,0,0];
 const banner = { text:"", t:0 };
 const confetti = [];
 const state = { mode:"title", t:0, candles:false, surpriseT:0, partyT:0, fade:0,
-                open:null, openT:0, camLockX:null, climb:null };
+                open:null, openT:0, camLockX:null, climb:null, working:false };
 const cam = { x:0, y:WORLD_H - 280 };
 
 // the kitchen stays an unreadable mosaic until he arrives — no spoilers
@@ -691,6 +696,21 @@ const nearTV = () => !!CONFIG.tv && dad.floor === 1 && dad.onGround &&
                      Math.abs((dad.x + P_W/2) - 223) < 26;
 const nearDog = () => !!CONFIG.dog && dad.floor === TOP && dad.onGround &&
                       Math.abs((dad.x + P_W/2) - (dogPos.x + 7)) < 18;
+const nearDesk = () => dad.floor === 2 && dad.onGround &&
+                       Math.abs((dad.x + P_W/2) - 225) < 29;
+function startWork() {
+  state.working = true;
+  keys.left = keys.right = false;
+  dad.x = 206; dad.y = groundY(2) - 22 - P_H;   // up onto the desk
+  dad.vy = 0; dad.onGround = true; dad.flip = false;
+  sfx.jump();
+}
+function stopWork() {
+  state.working = false;
+  dad.x = 181; dad.flip = true;                  // hop off the left edge
+  dad.vy = -95; dad.onGround = false;
+  sfx.jump();
+}
 
 // ───────────────────────────────────────────────────────────────── input ──
 const keys = { left:false, right:false };
@@ -775,6 +795,7 @@ const sfx = {
   climb() { if (audio.ctx) { const t = audio.ctx.currentTime;
               for (let i = 0; i < 6; i++) note(120 + i*26, t + i*0.075, 0.06, 0.045, "square"); } },
   arrive(){ if (audio.ctx) { const t = audio.ctx.currentTime; note(N.G4,t,0.16,0.05,"triangle"); note(N.C5,t+0.1,0.24,0.05,"triangle"); } },
+  key()   { if (audio.ctx) note(900 + Math.random()*700, audio.ctx.currentTime, 0.03, 0.018, "square"); },
   pop()   { if (audio.ctx) note(180 + Math.random()*400, audio.ctx.currentTime, 0.1, 0.05, "square"); },
 };
 const HB_SONG = [
@@ -800,11 +821,13 @@ function action() {
   if (state.tvOpen) { closeTV(); return; }
   if (state.open) { closePainting(); return; }
   if (state.mode === "play") {
+    if (state.working) { stopWork(); return; }
     const p = nearPainting();
     if (p) { openPainting(p); return; }
     const a = nearArch();
     if (a) { goUp(a); return; }
     if (nearTV()) { openTV(); return; }
+    if (nearDesk()) { startWork(); return; }
     if (nearCake() && !state.candles) { blowOut(); return; }
     if (nearDog()) { petDog(); return; }
     if (dad.onGround) { dad.onGround = false; dad.vy = JUMP_V; sfx.jump(); }
@@ -1143,9 +1166,23 @@ function drawStudy(gy, ty) {
   px(186, gy-22, 66, 4, "#8a5a3c"); px(188, gy-18, 4, 18, "#6a4530"); px(246, gy-18, 4, 18, "#6a4530");
   px(206, gy-14, 16, 3, "#3f4657"); px(206, gy-28, 3, 14, "#3f4657");
   px(208, gy-11, 3, 11, "#2f3547"); px(218, gy-11, 3, 11, "#2f3547");
-  px(236, gy-32, 2, 10, "#6a7280"); px(231, gy-38, 12, 6, "#f0d89a");
-  ctx.globalAlpha = 0.13; px(220, gy-38, 34, 24, C.warm); ctx.globalAlpha = 1;
-  px(192, gy-25, 14, 3, "#f2eee2"); px(196, gy-28, 10, 3, "#dfe4ea");
+  // the computer
+  px(226, gy-42, 24, 18, "#23262f"); px(226, gy-42, 24, 1, "#3a3f4c");
+  px(228, gy-40, 20, 13, state.working ? "#1d3247" : "#141a24");
+  if (state.working) {
+    const tick = Math.floor(state.t * 3);
+    for (let i = 0; i < 5; i++) {
+      const w = 4 + ((i * 7 + tick * (i + 3)) % 12);
+      px(230, gy - 38 + i * 2, w, 1, i % 2 ? "#6cbf8a" : "#7fb4ff");
+    }
+    if (Math.sin(state.t * 8) > 0) px(243, gy - 30, 2, 2, "#e8e6f2");
+    ctx.globalAlpha = 0.10; px(220, gy - 44, 34, 24, "#7fb4ff"); ctx.globalAlpha = 1;
+  } else {
+    px(230, gy-38, 5, 1, "#26344a");
+  }
+  px(235, gy-24, 6, 2, "#16181f");
+  px(204, gy-24, 18, 2, "#3a3f4c");                   // keyboard
+  px(190, gy-25, 12, 3, "#f2eee2"); px(193, gy-28, 9, 3, "#dfe4ea");
 }
 function drawMusic(gy, ty) {
   px(70, gy-40, 68, 30, "#4a2f24"); px(70, gy-40, 68, 2, "#7a5344");
@@ -1241,6 +1278,7 @@ function drawCake(t) {
 function drawDad(t) {
   let sp = SPR.m_idle;
   if (state.mode === "party" || state.mode === "message") sp = SPR.m_cheer;
+  else if (state.working) sp = Math.sin(state.t*11) > 0 ? SPR.m_type1 : SPR.m_type2;
   else if (state.open) sp = SPR.m_look;
   else if (!dad.onGround) sp = SPR.m_jump;
   else if (dad.vx !== 0) sp = (dad.anim|0) % 2 ? SPR.m_w1 : SPR.m_w2;
@@ -1279,10 +1317,12 @@ function drawHud(dt) {
     ctx.globalAlpha = 1;
   }
   if (state.mode === "play" && !state.open && !state.climb && !state.tvOpen) {
-    const p = nearPainting();
-    const prompt = p ? (p.seen ? "▲ look again" : "▲ look")
+    const p = state.working ? null : nearPainting();
+    const prompt = state.working ? "▲ jump off"
+                 : p ? "▲ look at painting"
                  : nearArch() ? "▲ go up"
                  : nearTV() ? "▲ turn on the tv"
+                 : nearDesk() ? "▲ pretend to work"
                  : (nearCake() && !state.candles) ? "▲ light the candles"
                  : nearDog() ? "▲ pet " + CONFIG.dog.name : null;
     document.getElementById("ba").classList.toggle("hint", !!prompt);
@@ -1325,9 +1365,8 @@ function drawTitle(t) {
   px(hx+33, hy+hh-18, 12, 18, "#4a3628");
   drawPerson(SPR.m_idle, hx+17, hy+hh-18, CONFIG.dadLook, false);
   px(hx-26, hy+hh, hw+52, 3, "#1a1a26");
-  drawText("HAPPY BIRTHDAY", VIEW_W/2, 32, C.gold, "center");
-  drawText(CONFIG.dadName.toUpperCase(), VIEW_W/2, 44, C.cream, "center");
-  drawText("get to the top floor", VIEW_W/2, 62, "#9aa0c8", "center");
+  drawText(CONFIG.gameTitle.toUpperCase(), VIEW_W/2, 36, C.gold, "center");
+  drawText("get to the top floor", VIEW_W/2, 52, "#9aa0c8", "center");
   if (Math.sin(t*3) > -0.4) drawText("tap to begin", VIEW_W/2, VIEW_H-40, C.ink, "center");
 }
 function drawMessage(dt) {
@@ -1392,6 +1431,9 @@ function frame(now) {
     state.climb.t += dt;
     if (state.climb.t >= CLIMB_T/2 && !state.climb.done) { state.climb.done = true; finishClimb(); }
     if (state.climb.t >= CLIMB_T) state.climb = null;
+  } else if (state.mode === "play" && state.working) {
+    typeTimer -= dt;
+    if (typeTimer <= 0) { typeTimer = 0.07 + Math.random() * 0.15; sfx.key(); }
   } else if (state.mode === "play" && !state.open && !state.tvOpen) {
     movePlayer(dt);
   } else if (state.mode === "party") {
