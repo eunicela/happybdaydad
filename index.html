@@ -41,6 +41,41 @@
   }
   #pad.hide, #mute.hide { opacity:0; pointer-events:none; }
   #pad, #mute { transition:opacity .4s; }
+  /* the TV close-up */
+  #tv {
+    position:fixed; inset:0; z-index:15;
+    background:rgba(6,6,14,0.93);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:0; transition:opacity .25s;
+  }
+  #tv.hide { opacity:0; pointer-events:none; }
+  #tvset {
+    width:min(92vw, 620px);
+    background:#23262f; border:4px solid #16181f; border-radius:6px;
+    padding:10px 10px 14px 10px;
+    box-shadow:0 0 0 2px #3a3f4c inset;
+    position:relative;
+  }
+  #tvscreen {
+    width:100%; aspect-ratio:16/9; background:#0a0c14; overflow:hidden;
+    border:2px solid #0d0f16;
+  }
+  #tvscreen iframe { width:100%; height:100%; border:0; display:block; }
+  #tvlight {
+    position:absolute; right:14px; bottom:5px; width:6px; height:6px;
+    background:#e0574f; border-radius:1px;
+  }
+  #tvstand {
+    width:min(60vw, 380px); height:10px; background:#8a5a3c;
+    border-bottom:4px solid #6a4530;
+  }
+  #tvlegs { width:min(50vw, 320px); display:flex; justify-content:space-between; }
+  #tvlegs span { width:10px; height:26px; background:#6a4530; }
+  #tvcap {
+    margin-top:16px; color:#f4f0e4; font-size:14px; text-align:center;
+    max-width:80vw; line-height:1.5;
+  }
+  #tvclose { margin-top:8px; color:#9aa0c8; font-size:13px; }
 </style>
 </head>
 <body>
@@ -49,6 +84,16 @@
 <div id="pad" class="hide">
   <div id="dpad"><div class="btn" id="bl">◀</div><div class="btn" id="br">▶</div></div>
   <div class="btn" id="ba">▲</div>
+</div>
+<div id="tv" class="hide">
+  <div id="tvset">
+    <div id="tvscreen"></div>
+    <div id="tvlight"></div>
+  </div>
+  <div id="tvstand"></div>
+  <div id="tvlegs"><span></span><span></span></div>
+  <div id="tvcap"></div>
+  <div id="tvclose">▲ close</div>
 </div>
 
 <script>
@@ -94,6 +139,11 @@ const CONFIG = {
     { name:"Eunice", hair:"#241c1a", skin:"#e8b98d", shirt:"#b5546e", pants:"#2e2c33", shoe:"#3a3128", long:true },
   ],
   dog: true,
+
+  // ── The TV in the living room ─────────────────────────────────────────
+  // Interacting with it plays this YouTube video on a close-up of the set.
+  // Needs internet when he plays; everything else works offline.
+  tv: { video:"Q-rGIR3DdNk", caption:"A little something to watch." },
 
   surprise: "SURPRISE!",
 
@@ -502,6 +552,8 @@ function nearPainting() {
 }
 const nearCake = () => dad.floor === TOP && dad.onGround &&
                        Math.abs((dad.x + P_W/2) - (CAKE_X + 9)) < 28;
+const nearTV = () => !!CONFIG.tv && dad.floor === 1 && dad.onGround &&
+                     Math.abs((dad.x + P_W/2) - 223) < 26;
 
 // ───────────────────────────────────────────────────────────────── input ──
 const keys = { left:false, right:false };
@@ -564,8 +616,12 @@ function note(freq, when, dur, vol, type) {
 const N = { C4:261.6,D4:293.7,E4:329.6,G4:392,A4:440,B4:493.9,C5:523.3,D5:587.3,E5:659.3,G5:784,C6:1046.5 };
 const LOOP = [N.C4,N.E4,N.G4,N.E4,N.A4,N.G4,N.E4,N.D4];
 function schedule() {
-  if (!audio.ctx || state.mode === "party" || state.mode === "message") return;
+  if (!audio.ctx) return;
   const t = audio.ctx.currentTime;
+  if (state.mode === "party" || state.mode === "message" || state.tvOpen) {
+    audio.next = t + 0.3;      // keep the clock current so resume doesn't flood
+    return;
+  }
   while (audio.next < t + 0.4) {
     const i = audio.step % LOOP.length;
     note(LOOP[i], audio.next, 0.45, 0.045, "triangle");
@@ -604,12 +660,14 @@ function playHappyBirthday() {
 function action() {
   if (state.mode === "title") { start(); return; }
   if (state.climb) return;
+  if (state.tvOpen) { closeTV(); return; }
   if (state.open) { closePainting(); return; }
   if (state.mode === "play") {
     const p = nearPainting();
     if (p) { openPainting(p); return; }
     const a = nearArch();
     if (a) { goUp(a); return; }
+    if (nearTV()) { openTV(); return; }
     if (nearCake() && !state.candles) { blowOut(); return; }
     if (dad.onGround) { dad.onGround = false; dad.vy = JUMP_V; sfx.jump(); }
     return;
@@ -648,6 +706,25 @@ function finishClimb() {
 }
 function openPainting(p) { state.open = p; state.openT = 0; p.seen = true; keys.left = keys.right = false; sfx.chime(); }
 function closePainting() { state.open = null; }
+function openTV() {
+  state.tvOpen = true;
+  keys.left = keys.right = false;
+  const scr = document.getElementById("tvscreen");
+  scr.innerHTML = '<iframe src="https://www.youtube.com/embed/' + CONFIG.tv.video +
+    '?autoplay=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
+  document.getElementById("tvcap").textContent = CONFIG.tv.caption || "";
+  document.getElementById("tv").classList.remove("hide");
+  sfx.chime();
+}
+function closeTV() {
+  state.tvOpen = false;
+  document.getElementById("tvscreen").innerHTML = "";   // stops playback
+  document.getElementById("tv").classList.add("hide");
+}
+document.getElementById("tv").addEventListener("pointerdown", e => {
+  // tap the darkness (not the video itself) to close
+  if (e.target.id !== "tvscreen" && e.target.tagName !== "IFRAME") { e.preventDefault(); closeTV(); }
+});
 function blowOut() {
   state.candles = true; state.mode = "party"; state.partyT = 0;
   keys.left = keys.right = false;
@@ -807,8 +884,19 @@ function drawLiving(gy, ty) {
   px(176, gy-32, 3, 32, "#4a3c2c"); px(172, gy-2, 11, 2, "#4a3c2c");     // floor lamp
   px(168, gy-42, 19, 10, "#f0d89a"); px(168, gy-42, 19, 1, "#fdf0c0");
   ctx.globalAlpha = 0.13; px(154, gy-44, 48, 44, C.warm); ctx.globalAlpha = 1;
-  px(200, gy-30, 44, 26, "#23262f"); px(203, gy-27, 38, 20, "#3d5a72");
-  px(206, gy-24, 12, 5, "#5f83a0"); px(216, gy-4, 12, 4, "#23262f");
+  // tv on a wooden stand
+  px(196, gy-18, 54, 4, "#8a5a3c"); px(196, gy-18, 54, 1, "#a8744c");
+  px(200, gy-14, 4, 14, "#6a4530"); px(242, gy-14, 4, 14, "#6a4530");
+  px(219, gy-21, 8, 3, "#16181f");                       // foot
+  px(199, gy-49, 48, 28, "#23262f"); px(199, gy-49, 48, 1, "#3a3f4c");
+  px(202, gy-46, 42, 22, "#101620");
+  // the screen glows and flickers, asking to be switched on
+  const fl = 0.55 + 0.2 * Math.sin(state.t * 3) + 0.08 * Math.sin(state.t * 17);
+  ctx.globalAlpha = fl;
+  px(203, gy-45, 40, 20, "#3d5a72");
+  px(206, gy-42, 14, 6, "#5f83a0");
+  ctx.globalAlpha = 1;
+  px(241, gy-24, 2, 2, "#e0574f");                       // standby light
 }
 function drawStudy(gy, ty) {
   px(68, ty+6, 58, ROOM_H-6, "#6a4632"); px(68, ty+6, 58, 2, "#82593c");
@@ -979,10 +1067,11 @@ function drawHud(dt) {
     drawText(banner.text, VIEW_W/2, 12, C.gold, "center");
     ctx.globalAlpha = 1;
   }
-  if (state.mode === "play" && !state.open && !state.climb) {
+  if (state.mode === "play" && !state.open && !state.climb && !state.tvOpen) {
     const p = nearPainting();
     const prompt = p ? (p.seen ? "▲ look again" : "▲ look")
                  : nearArch() ? "▲ go up"
+                 : nearTV() ? "▲ turn on the tv"
                  : (nearCake() && !state.candles ? "▲ light the candles" : null);
     document.getElementById("ba").classList.toggle("hint", !!prompt);
     // float it above his head — the bottom of the screen belongs to the buttons
@@ -1089,7 +1178,7 @@ function frame(now) {
     state.climb.t += dt;
     if (state.climb.t >= CLIMB_T/2 && !state.climb.done) { state.climb.done = true; finishClimb(); }
     if (state.climb.t >= CLIMB_T) state.climb = null;
-  } else if (state.mode === "play" && !state.open) {
+  } else if (state.mode === "play" && !state.open && !state.tvOpen) {
     movePlayer(dt);
   } else if (state.mode === "party") {
     state.partyT += dt;
