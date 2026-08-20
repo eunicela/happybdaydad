@@ -91,10 +91,6 @@
   }
   #phcv { display:block; image-rendering:pixelated; background:#111; }
   #phtitle { margin-top:16px; color:#ffd36e; font-size:16px; text-align:center; }
-  #phcap {
-    margin-top:8px; color:#f4f0e4; font-size:14px; text-align:center;
-    max-width:82vw; line-height:1.5;
-  }
   #phclose { margin-top:10px; color:#9aa0c8; font-size:13px; }
 </style>
 </head>
@@ -108,7 +104,6 @@
 <div id="ph" class="hide">
   <div id="phframe"><canvas id="phcv"></canvas></div>
   <div id="phtitle"></div>
-  <div id="phcap"></div>
   <div id="phclose">▲ close</div>
 </div>
 <div id="tv" class="hide">
@@ -127,7 +122,7 @@
 
 /* ══════════════════════════════════════════════════════════════════════════
    ╔════════════════════════════════════════════════════════════════════╗
-   ║  EDIT ONLY THIS BLOCK — names, captions, colours, the message.     ║
+   ║  EDIT ONLY THIS BLOCK — names, photos, colours, the message.       ║
    ╚════════════════════════════════════════════════════════════════════╝
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -143,28 +138,19 @@ const CONFIG = {
   // clear for the stairwells.
   floors: [
     { name:"The Hallway", paintings:[
-      { scene:"home", x:64, title:"The House",
-        caption:"You picked it. You fixed it. You kept it standing." },
-      { scene:"film", photo:"photos/film.jpg", x:100, title:"The Film Shoot",
-        caption:"One roll of film. Two naturals." } ] },
+      { scene:"home", x:64, title:"The House" },
+      { scene:"film", photo:"photos/film.jpg", x:100, title:"The Film Shoot" } ] },
     { name:"The Living Room", paintings:[
-      { scene:"dog", photo:"photos/keifer.jpg", x:118, title:"Keifer at Sunset",
-        caption:"Best seat in the house, and he knows it." } ] },
+      { scene:"dog", photo:"photos/keifer.jpg", x:118, title:"Keifer at Sunset" } ] },
     { name:"The Study", paintings:[
-      { scene:"penang", photo:"photos/penang.jpg", x:131, title:"Penang",
-        caption:"The family trip to Penang. You ordered for the whole table, and you were right every time." },
-      { scene:"durian", photo:"photos/durian.jpg", x:163, title:"Durian in Sri Lanka",
-        caption:"Roadside durian in Sri Lanka. Some of us enjoyed it more than others." } ] },
+      { scene:"penang", photo:"photos/penang.jpg", x:131, title:"Penang" },
+      { scene:"durian", photo:"photos/durian.jpg", x:163, title:"Durian in Sri Lanka" } ] },
     { name:"The Music Room", paintings:[
-      { scene:"london", photo:"photos/london.jpg", x:176, title:"London, Canada",
-        caption:"Dropping Oliver off in London. The car was quieter the whole way home." },
-      { scene:"cookoff", photo:"photos/cookoff.jpg", x:232, title:"The Cookoff",
-        caption:"South Africa. The aprons said LAI FAMILY, and the captain was obvious." } ] },
+      { scene:"london", photo:"photos/london.jpg", x:176, title:"London, Canada" },
+      { scene:"cookoff", photo:"photos/cookoff.jpg", x:232, title:"The Cookoff" } ] },
     { name:"The Landing", paintings:[
-      { scene:"kinabalu", photo:"photos/kinabalu.jpg", x:112, title:"Mount Kinabalu",
-        caption:"Sunrise at the summit. You got us all the way up." },
-      { scene:"graduation", photo:"photos/graduation.jpg", x:216, title:"Graduation Day",
-        caption:"You clapped the loudest. You always do." } ] },
+      { scene:"kinabalu", photo:"photos/kinabalu.jpg", x:112, title:"Mount Kinabalu" },
+      { scene:"graduation", photo:"photos/graduation.jpg", x:216, title:"Graduation Day" } ] },
   ],
 
   kitchenName: "The Kitchen",
@@ -641,7 +627,7 @@ const paintings = [];
 CONFIG.floors.forEach((f, i) => {
   const list = f.paintings || (f.painting ? [f.painting] : []);
   for (const p of list)
-    paintings.push({ scene:p.scene, title:p.title, caption:p.caption, photo:p.photo,
+    paintings.push({ scene:p.scene, title:p.title, photo:p.photo,
                      floor:i, seen:false, x:p.x, y:groundY(i) - 52 });
 });
 
@@ -882,7 +868,6 @@ function openPainting(p) {
   sfx.chime();
   const token = ++ph.token;
   document.getElementById("phtitle").textContent = p.title || "";
-  document.getElementById("phcap").textContent = p.caption || "";
   phDrawScene(p.scene);
   ph.el.classList.remove("hide");
   if (!p.photo) return;
