@@ -1280,8 +1280,8 @@ function drawDadSeated(t) {
   const tap = Math.sin(t*11) > 0 ? 0 : 1;
   drawPerson(HEAD_M.concat(TORSO_IDLE), x, gy-31 + tap, m, false);
   px(x+4, gy-17, 9, 3, m.pants);                 // thighs under the desk
-  px(x+10, gy-14, 3, 11, m.pants);
-  px(x+10, gy-3, 5, 3, m.shoe);
+  px(x+10, gy-14, 3, 5, m.pants);                // short shins, feet dangling
+  px(x+10, gy-9, 5, 3, m.shoe);
 }
 // redrawn over him while seated, so the desk is in front of his chest
 function drawDeskFront() {
