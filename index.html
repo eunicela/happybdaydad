@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d1c">
+<title>Happy Birthday, Dad</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%; overflow:hidden; background:#07080f;
+    touch-action:none; overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+    font-family:ui-monospace, Menlo, Consolas, monospace;
+  }
+  #game { display:block; width:100%; height:100%; image-rendering:pixelated; object-fit:contain; }
+  #pad {
+    position:fixed; inset:auto 0 0 0; height:32%; max-height:200px;
+    pointer-events:none; z-index:10;
+    padding:0 4vw calc(3vh + env(safe-area-inset-bottom)) 4vw;
+    display:flex; align-items:flex-end; justify-content:space-between;
+  }
+  .btn {
+    pointer-events:auto;
+    width:19vw; height:19vw; max-width:86px; max-height:86px; min-width:58px; min-height:58px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.10); border:2px solid rgba(255,255,255,0.22);
+    display:flex; align-items:center; justify-content:center;
+    color:rgba(255,255,255,0.75); font-size:min(7vw,29px); line-height:1;
+    transition:background .06s, transform .06s, box-shadow .2s;
+  }
+  .btn.on { background:rgba(255,214,140,0.34); transform:scale(0.94); color:#fff; }
+  .btn.hint { box-shadow:0 0 0 3px rgba(255,211,110,0.5); background:rgba(255,211,110,0.24); color:#fff; }
+  #dpad { display:flex; gap:3vw; }
+  #mute {
+    position:fixed; top:calc(env(safe-area-inset-top) + 10px); right:12px; z-index:11;
+    width:34px; height:34px; border-radius:8px;
+    background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16);
+    color:rgba(255,255,255,0.6); font-size:15px; display:flex; align-items:center; justify-content:center;
+  }
+  #pad.hide, #mute.hide { opacity:0; pointer-events:none; }
+  #pad, #mute { transition:opacity .4s; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="mute" class="hide">♪</div>
+<div id="pad" class="hide">
+  <div id="dpad"><div class="btn" id="bl">◀</div><div class="btn" id="br">▶</div></div>
+  <div class="btn" id="ba">▲</div>
+</div>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ╔════════════════════════════════════════════════════════════════════╗
+   ║  EDIT ONLY THIS BLOCK — names, captions, colours, the message.     ║
+   ╚════════════════════════════════════════════════════════════════════╝
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const CONFIG = {
+
+  dadName: "Dad",
+  dadLook: { hair:"#211d1f", skin:"#e0a878", shirt:"#d8cbb0", pants:"#a68c5c", shoe:"#3a3128", glasses:true },
+
+  // ── Five floors he climbs through, bottom first. One painting on each. ──
+  // scene can be: home, dog, graduation, holiday, bike
+  floors: [
+    { name:"The Garage",
+      painting:{ scene:"home", title:"The House",
+                 caption:"You picked it. You fixed it. You kept it standing." } },
+    { name:"The Living Room",
+      painting:{ scene:"dog", title:"Sunset, Rooftop",
+                 caption:"Best seat in the house, and he knows it." } },
+    { name:"The Study",
+      painting:{ scene:"bike", title:"Learning To Ride",
+                 caption:"You said you'd let go. You did not let go." } },
+    { name:"The Music Room",
+      painting:{ scene:"holiday", title:"That Trip",
+                 caption:"Sand in absolutely everything. Worth it." } },
+    { name:"The Landing",
+      painting:{ scene:"graduation", title:"Graduation Day",
+                 caption:"You clapped the loudest. You always do." } },
+  ],
+
+  kitchenName: "The Kitchen",
+
+  // ── Everyone waiting at the top ───────────────────────────────────────
+  family: [
+    { name:"Mum",    hair:"#2a2124", skin:"#e8b98d", shirt:"#3a4c74", pants:"#39405a", shoe:"#3a3128", long:true },
+    { name:"Oliver", hair:"#1d1a1c", skin:"#e2ab7d", shirt:"#5c626e", pants:"#8a7550", shoe:"#3a3128", glasses:true },
+    { name:"Eunice", hair:"#241c1a", skin:"#e8b98d", shirt:"#b5546e", pants:"#2e2c33", shoe:"#3a3128", long:true },
+  ],
+  dog: true,
+
+  surprise: "SURPRISE!",
+
+  // ── The message, once the candles are out ─────────────────────────────
+  finaleTitle: "Happy Birthday, Dad",
+  finaleLines: [
+    "You built this whole house",
+    "around us.",
+    "",
+    "Thanks for every floor of it.",
+  ],
+  signature: "— Mum, Oliver & Eunice",
+
+  music: true,
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Nothing below here needs editing.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const PREVIEW = /[?&]house/.test(location.search);
+
+// ───────────────────────────────────────────────────────────── constants ──
+let VIEW_W = 128, VIEW_H = 280;
+const ROOM_W  = 320;
+const FLOOR_H = 72;          // 64 of room + 8 of floor slab
+const SLAB    = 8;
+const FLOORS  = 6;           // 5 floors to climb + the kitchen
+const TOP     = FLOORS - 1;
+const ROOF    = 24;
+const WORLD_H = FLOORS * FLOOR_H + ROOF;
+const WORLD_BOT = WORLD_H + SLAB;      // includes the ground-floor slab
+
+const GRAV=400, WALK=46, JUMP_V=-150, MAXFALL=280;
+const STEP_UP=7, STEP_DOWN=9;
+const P_W=8, P_H=18;
+
+// staircase: 12 steps of 6px rise / 8px run, then a landing at the top
+const RISE=6, RUN=8, STEPS=12;
+const LAND_W  = 32;
+const LAND_X0 = ROOM_W - LAND_W;                 // 288
+const STAIR_X0= LAND_X0 - RUN * (STEPS - 1);     // 200
+
+const groundY  = i => WORLD_H - i * FLOOR_H;
+const roomTop  = i => groundY(i) - (FLOOR_H - SLAB);
+const goesRight= i => i % 2 === 0;
+
+// ─────────────────────────────────────────────────────────────── palette ──
+const C = {
+  night:"#0b0d1c", star:"#cdd6f5", moon:"#f2eac2",
+  slab:"#6b5240", slabHi:"#82634b", slabLo:"#3f3025",
+  wood:"#7a5636", woodDk:"#5a3d26",
+  stair:"#7a5433", stairHi:"#a3764c", stairLo:"#513520",
+  rail:"#3b2c1f",
+  panel:"#161a2e", panelHi:"#39406b",
+  ink:"#e8e6f2", gold:"#ffd36e", warm:"#ffb545",
+  pink:"#f19bb6", cream:"#fff4dc", green:"#6cbf8a", red:"#e0574f",
+  frame:"#9a7748", frameHi:"#c19b62",
+};
+const WALL    = ["#33333c","#42343f","#333a4c","#3f3546","#453845","#54413a"];
+const WALL2    = ["#2a2a31","#392c36","#2c3242","#372e3d","#3c3039","#4a3830"];
+const FLOORCOL = ["#565660","#7a5539","#66523c","#7a5539","#6d5540","#98764f"];
+
+// ──────────────────────────────────────────────────────────────── sprites ──
+// h hair, s skin, e eye, m mouth, S shirt, P pants, b shoe
+const LEGS_STAND = ["..PPPPPPPP..","..PPP..PPP..","..PPP..PPP..",".bbb....bbb."];
+const LEGS_W1    = ["..PPPPPPPP..","..PPPP.PPP..",".PPP...PPP..","bbb.....bbb."];
+const LEGS_W2    = ["..PPPPPPPP..","..PPP.PPPP..","..PPP...PPP.",".bbb.....bbb"];
+const LEGS_JUMP  = ["..PPPPPPPP..","..PPPPPPPP..",".PPP....PPP.","bbb......bbb"];
+
+const HEAD_M = [
+  "....hhhh....","...hhhhhh...","..hhhhhhhh..","..hssssssh..","..hssssssh..",
+  "..sseesees..","..ssssssss..","...ssmmss...","....ssss....",
+];
+const HEAD_F = [
+  "....hhhh....","...hhhhhh...","..hhhhhhhh..",".hhsssssshh.",".hhsssssshh.",
+  ".hsseeseesh.",".hssssssssh.",".h.ssmmss.h.",".h..ssss..h.",
+];
+const TORSO_IDLE = ["..SSSSSSSS..",".sSSSSSSSSs.",".sSSSSSSSSs.","..SSSSSSSS..","..SSSSSSSS.."];
+const TORSO_UP   = [".s.SSSSSS.s.",".s.SSSSSS.s.","...SSSSSS...","..SSSSSSSS..","..SSSSSSSS.."];
+const TORSO_CHEER= ["s..SSSSSS..s","s..SSSSSS..s","...SSSSSS...","..SSSSSSSS..","..SSSSSSSS.."];
+const TORSO_LOOK = ["..SSSSSSSS..",".sSSSSSSSS..",".sSSSSSSSS..","..SSSSSSSS..","..SSSSSSSS.."];
+
+const body = (head, torso, legs) => head.concat(torso, legs);
+const SPR = {
+  m_idle:  body(HEAD_M, TORSO_IDLE,  LEGS_STAND),
+  m_w1:    body(HEAD_M, TORSO_IDLE,  LEGS_W1),
+  m_w2:    body(HEAD_M, TORSO_IDLE,  LEGS_W2),
+  m_jump:  body(HEAD_M, TORSO_UP,    LEGS_JUMP),
+  m_cheer: body(HEAD_M, TORSO_CHEER, LEGS_STAND),
+  m_look:  body(HEAD_M, TORSO_LOOK,  LEGS_STAND),
+  f_idle:  body(HEAD_F, TORSO_IDLE,  LEGS_STAND),
+  f_cheer: body(HEAD_F, TORSO_CHEER, LEGS_STAND),
+};
+
+// the border collie, sitting, facing right. k black, w white, e eye, n nose
+const DOG_IDLE = [
+  ".........kk..",
+  "........kkkk.",
+  "........kkkkk",
+  ".......kkwkkk",
+  ".......kkwkkk",
+  "......kewwwkk",
+  "......kkwwnwk",
+  "..kk..kwwwwww",
+  ".kkkk.kwwwwww",
+  ".kkkkkkwwwww.",
+  ".kkkkkkkwwww.",
+  "..kkkkkkwwww.",
+  "..kkkkkkwwww.",
+  "...kk..ww.ww.",
+];
+const DOG_WAG = DOG_IDLE.slice(0,7).concat([
+  "kk....kwwwwww",
+  ".kkk..kwwwwww",
+  ".kkkkkkwwwww.",
+  ".kkkkkkkwwww.",
+  "..kkkkkkwwww.",
+  "..kkkkkkwwww.",
+  "...kk..ww.ww.",
+]);
+const DOG_PAL = { k:"#1e1b1e", w:"#f4efe6", e:"#8a6038", n:"#2a2226" };
+
+const CAKE = [
+  "..................","..................","..................",
+  "...c....c....c....","...c....c....c....",
+  "..wwwwwwwwwwwwww..","..wwwwwwwwwwwwww..","..PPPPPPPPPPPPPP..",
+  "..wwwwwwwwwwwwww..","..wwwwwwwwwwwwww..","..wwwwwwwwwwwwww..",
+  "..PPPPPPPPPPPPPP..","..wwwwwwwwwwwwww..","..wwwwwwwwwwwwww..",
+  ".pppppppppppppppp.","..................",
+];
+const CAKE_PAL = { c:"#f2f2ea", w:"#fff4dc", P:"#f19bb6", p:"#c9cbd6" };
+const CANDLE_X = [3, 8, 13];
+
+// ──────────────────────────────────────────────────────── canvas + text ──
+const cv  = document.getElementById("game");
+const ctx = cv.getContext("2d", { alpha:false });
+ctx.imageSmoothingEnabled = false;
+
+// A 5x8 bitmap font, baked in. System fonts differ between phones and
+// antialiasing turns to mush at this size, so the letters are drawn by hand.
+const GLYPHS = {
+  A:"01110/10001/10001/11111/10001/10001/10001/00000",
+  B:"11110/10001/10001/11110/10001/10001/11110/00000",
+  C:"01110/10001/10000/10000/10000/10001/01110/00000",
+  D:"11110/10001/10001/10001/10001/10001/11110/00000",
+  E:"11111/10000/10000/11110/10000/10000/11111/00000",
+  F:"11111/10000/10000/11110/10000/10000/10000/00000",
+  G:"01110/10001/10000/10111/10001/10001/01111/00000",
+  H:"10001/10001/10001/11111/10001/10001/10001/00000",
+  I:"11111/00100/00100/00100/00100/00100/11111/00000",
+  J:"00111/00010/00010/00010/00010/10010/01100/00000",
+  K:"10001/10010/10100/11000/10100/10010/10001/00000",
+  L:"10000/10000/10000/10000/10000/10000/11111/00000",
+  M:"10001/11011/10101/10101/10001/10001/10001/00000",
+  N:"10001/11001/10101/10011/10001/10001/10001/00000",
+  O:"01110/10001/10001/10001/10001/10001/01110/00000",
+  P:"11110/10001/10001/11110/10000/10000/10000/00000",
+  Q:"01110/10001/10001/10001/10101/10010/01101/00000",
+  R:"11110/10001/10001/11110/10100/10010/10001/00000",
+  S:"01111/10000/10000/01110/00001/00001/11110/00000",
+  T:"11111/00100/00100/00100/00100/00100/00100/00000",
+  U:"10001/10001/10001/10001/10001/10001/01110/00000",
+  V:"10001/10001/10001/10001/10001/01010/00100/00000",
+  W:"10001/10001/10001/10101/10101/11011/10001/00000",
+  X:"10001/10001/01010/00100/01010/10001/10001/00000",
+  Y:"10001/10001/01010/00100/00100/00100/00100/00000",
+  Z:"11111/00001/00010/00100/01000/10000/11111/00000",
+  a:"00000/00000/01110/00001/01111/10001/01111/00000",
+  b:"10000/10000/11110/10001/10001/10001/11110/00000",
+  c:"00000/00000/01111/10000/10000/10000/01111/00000",
+  d:"00001/00001/01111/10001/10001/10001/01111/00000",
+  e:"00000/00000/01110/10001/11111/10000/01110/00000",
+  f:"00110/01001/01000/11100/01000/01000/01000/00000",
+  g:"00000/00000/01111/10001/10001/01111/00001/01110",
+  h:"10000/10000/11110/10001/10001/10001/10001/00000",
+  i:"00100/00000/01100/00100/00100/00100/01110/00000",
+  j:"00010/00000/00110/00010/00010/00010/10010/01100",
+  k:"10000/10000/10010/10100/11000/10100/10010/00000",
+  l:"01100/00100/00100/00100/00100/00100/01110/00000",
+  m:"00000/00000/11010/10101/10101/10101/10101/00000",
+  n:"00000/00000/11110/10001/10001/10001/10001/00000",
+  o:"00000/00000/01110/10001/10001/10001/01110/00000",
+  p:"00000/00000/11110/10001/10001/11110/10000/10000",
+  q:"00000/00000/01111/10001/10001/01111/00001/00001",
+  r:"00000/00000/10110/11000/10000/10000/10000/00000",
+  s:"00000/00000/01111/10000/01110/00001/11110/00000",
+  t:"01000/01000/11110/01000/01000/01001/00110/00000",
+  u:"00000/00000/10001/10001/10001/10011/01101/00000",
+  v:"00000/00000/10001/10001/10001/01010/00100/00000",
+  w:"00000/00000/10001/10101/10101/10101/01010/00000",
+  x:"00000/00000/10001/01010/00100/01010/10001/00000",
+  y:"00000/00000/10001/10001/10001/01111/00001/01110",
+  z:"00000/00000/11111/00010/00100/01000/11111/00000",
+  "0":"01110/10011/10101/10101/11001/10001/01110/00000",
+  "1":"00100/01100/00100/00100/00100/00100/01110/00000",
+  "2":"01110/10001/00001/00110/01000/10000/11111/00000",
+  "3":"11111/00010/00100/00010/00001/10001/01110/00000",
+  "4":"00010/00110/01010/10010/11111/00010/00010/00000",
+  "5":"11111/10000/11110/00001/00001/10001/01110/00000",
+  "6":"00110/01000/10000/11110/10001/10001/01110/00000",
+  "7":"11111/00001/00010/00100/01000/01000/01000/00000",
+  "8":"01110/10001/10001/01110/10001/10001/01110/00000",
+  "9":"01110/10001/10001/01111/00001/00010/01100/00000",
+  ".":"00000/00000/00000/00000/00000/01100/01100/00000",
+  ",":"00000/00000/00000/00000/00000/01100/00100/01000",
+  "'":"01000/01000/00000/00000/00000/00000/00000/00000",
+  '"':"01010/01010/00000/00000/00000/00000/00000/00000",
+  "!":"00100/00100/00100/00100/00100/00000/00100/00000",
+  "?":"01110/10001/00001/00110/00100/00000/00100/00000",
+  "-":"00000/00000/00000/01110/00000/00000/00000/00000",
+  "—":"00000/00000/00000/11111/00000/00000/00000/00000",
+  ":":"00000/01100/01100/00000/01100/01100/00000/00000",
+  ";":"00000/01100/01100/00000/01100/00100/01000/00000",
+  "(":"00010/00100/01000/01000/01000/00100/00010/00000",
+  ")":"01000/00100/00010/00010/00010/00100/01000/00000",
+  "&":"01100/10010/10100/01000/10101/10010/01101/00000",
+  "/":"00001/00010/00010/00100/01000/01000/10000/00000",
+  "▲":"00000/00000/00000/00100/01110/11111/00000/00000",
+};
+const LINE_H = 10, SPACE_W = 4;
+const font = {};
+for (const ch in GLYPHS) {
+  const rows = GLYPHS[ch].split("/");
+  let min = 5, max = -1;
+  for (const r of rows) for (let c = 0; c < 5; c++)
+    if (r[c] === "1") { if (c < min) min = c; if (c > max) max = c; }
+  font[ch] = max < 0 ? { w:SPACE_W, min:0, rows:[] } : { w:max-min+1, min, rows };
+}
+function textW(str) {
+  let w = 0;
+  for (const ch of str) {
+    if (ch === " ") { w += SPACE_W; continue; }
+    const g = font[ch];
+    w += (g ? g.w : 3) + 1;
+  }
+  return Math.max(0, w - 1);
+}
+function drawText(str, x, y, color, align) {
+  if (!str) return;
+  let dx = align === "center" ? Math.round(x - textW(str)/2)
+         : align === "right"  ? Math.round(x - textW(str)) : Math.round(x);
+  y = Math.round(y);
+  ctx.fillStyle = color;
+  for (const ch of str) {
+    if (ch === " ") { dx += SPACE_W; continue; }
+    const g = font[ch];
+    if (!g) { dx += 4; continue; }
+    for (let r = 0; r < g.rows.length; r++) {
+      const row = g.rows[r];
+      for (let c = 0; c < g.w; c++)
+        if (row[g.min + c] === "1") ctx.fillRect(dx + c, y + r, 1, 1);
+    }
+    dx += g.w + 1;
+  }
+}
+function wrap(str, maxPx) {
+  const out = []; let line = "";
+  for (const w of str.split(" ")) {
+    const t = line ? line + " " + w : w;
+    if (textW(t) > maxPx && line) { out.push(line); line = w; } else line = t;
+  }
+  if (line) out.push(line);
+  return out;
+}
+function resize() {
+  if (PREVIEW) { VIEW_W = ROOM_W; VIEW_H = WORLD_BOT; }
+  else {
+    VIEW_W = 128;
+    VIEW_H = Math.max(190, Math.min(400, Math.round(VIEW_W * innerHeight / innerWidth)));
+  }
+  cv.width = VIEW_W; cv.height = VIEW_H;
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener("resize", resize);
+addEventListener("orientationchange", () => setTimeout(resize, 120));
+resize();
+
+function px(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x|0, y|0, w|0, h|0); }
+function drawSprite(sp, x, y, pal, flip) {
+  x = Math.round(x); y = Math.round(y);
+  const w = sp[0].length;
+  for (let r = 0; r < sp.length; r++) {
+    const row = sp[r];
+    for (let c = 0; c < w; c++) {
+      const col = pal[row[c]];
+      if (!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(x + (flip ? w-1-c : c), y + r, 1, 1);
+    }
+  }
+}
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const lerp  = (a,b,t) => a + (b-a)*t;
+
+// ─────────────────────────────────────────────────────── painting scenes ──
+const ART_W = 26, ART_H = 18;
+
+function scene(id, ox, oy, s) {
+  const P = (x,y,w,h,c) => px(ox + x*s, oy + y*s, w*s, h*s, c);
+  if (id === "dog") {
+    P(0,0,26,2,"#75639e"); P(0,2,26,2,"#a86f9c"); P(0,4,26,2,"#dd8a6d");
+    P(0,6,26,1,"#f2ab6a"); P(0,7,26,1,"#f8d99e");
+    P(3,3,5,5,"#c8cdd8"); P(4,5,1,1,"#8f97a5"); P(6,4,1,1,"#8f97a5");
+    P(16,2,4,1,"#efb6ac"); P(21,4,3,1,"#efb6ac");
+    P(0,8,26,3,"#d9cfc3"); P(0,8,26,1,"#f0e7db");
+    P(0,15,26,3,"#c2a184"); P(0,15,26,1,"#d6b697");
+    P(1,11,24,4,"#5c4436"); P(1,10,4,5,"#6d5140"); P(21,10,4,5,"#6d5140");
+    for (let x = 1; x < 25; x += 2) P(x,12,1,3,"#4b382d");
+    P(10,6,5,4,"#1e1b1e"); P(11,7,3,3,"#f4efe6"); P(10,6,1,2,"#1e1b1e");
+    P(12,8,1,1,"#7a5330"); P(11,9,2,1,"#e0798a");
+    P(11,10,5,5,"#f4efe6"); P(14,9,3,6,"#1e1b1e"); P(10,13,2,2,"#f4efe6");
+    P(16,10,2,4,"#1e1b1e");
+  } else if (id === "graduation") {
+    P(0,0,26,4,"#26262e"); P(3,1,3,1,"#61616f"); P(11,1,3,1,"#61616f"); P(19,1,3,1,"#61616f");
+    P(0,4,26,10,"#3b3b46");
+    P(6,4,15,7,"#ece7dc"); P(7,5,13,1,"#b53a3a"); P(8,7,5,3,"#3a3a44"); P(14,7,5,3,"#6aa8c8");
+    P(0,14,26,4,"#a8865c"); P(0,14,26,1,"#bb9a6d");
+    const who = [[2,"#d8cbb0","#211d1f"],[7,"#5c626e","#1d1a1c"],[19,"#3a4c74","#2a2124"]];
+    for (const [x,shirt,hair] of who) {
+      P(x,7,4,2,hair); P(x,9,4,2,"#e0a878"); P(x,11,4,4,shirt); P(x,15,4,2,"#3a3128");
+    }
+    P(13,7,4,2,"#241c1a"); P(12,6,6,1,"#1a1a20"); P(14,5,2,1,"#c9a24a");
+    P(13,9,4,2,"#e8b98d"); P(13,11,4,4,"#2e2c33"); P(12,12,1,3,"#c25a4a");
+    P(13,15,4,2,"#3a3128"); P(17,12,2,3,"#8c1f2a");
+  } else if (id === "holiday") {
+    P(0,0,26,4,"#8fb6d8"); P(0,4,26,2,"#bad4e4"); P(20,1,3,3,"#fff0b0");
+    P(0,6,26,5,"#3f7fa8"); P(0,6,26,1,"#5a9cc0");
+    for (let x = 0; x < 26; x += 4) P(x,8,2,1,"#8fc4dc");
+    P(0,11,26,7,"#e2ca9a"); P(0,11,26,1,"#efdcb4");
+    P(4,6,3,2,"#2f6a90"); P(15,7,4,2,"#2f6a90");
+    const who = [[5,"#d8cbb0"],[9,"#3a4c74"],[13,"#5c626e"],[17,"#b5546e"]];
+    for (const [x,shirt] of who) { P(x,8,2,1,"#241c1a"); P(x,9,2,1,"#e0a878"); P(x,10,2,3,shirt); }
+    P(22,9,1,5,"#8a6a3a"); P(21,8,3,1,"#6cbf8a");
+  } else if (id === "bike") {
+    P(0,0,26,3,"#e0995f"); P(0,3,26,2,"#eeb977"); P(0,5,26,2,"#f7d79a");
+    P(21,1,4,4,"#fff3c0");
+    P(0,7,26,3,"#6b8a5a"); P(0,7,26,1,"#7fa06a");
+    P(0,10,26,8,"#5a5a62"); P(0,10,26,1,"#6e6e78");
+    for (let x = 1; x < 26; x += 6) P(x,13,3,1,"#c9c9b8");
+    P(4,4,2,4,"#3a5a3a"); P(3,2,4,3,"#4a7a4a");
+    // bike + kid
+    P(11,14,4,4,"#2a2a30"); P(17,14,4,4,"#2a2a30");
+    P(12,13,7,1,"#b5514a"); P(15,10,1,4,"#b5514a");
+    P(13,8,3,2,"#241c1a"); P(13,10,3,2,"#e8b98d"); P(13,12,4,2,"#f0c14a");
+    // dad running behind, arm out
+    P(4,8,4,2,"#211d1f"); P(4,10,4,2,"#e0a878"); P(4,12,4,4,"#d8cbb0");
+    P(8,12,4,1,"#e0a878"); P(4,16,2,2,"#3a3128"); P(7,16,2,2,"#3a3128");
+  } else {
+    P(0,0,26,11,"#141a33");
+    for (let i = 0; i < 16; i++) P((i*7+3)%25, (i*5)%9, 1, 1, i%3 ? "#cdd6f5" : "#f2eac2");
+    P(21,1,3,3,"#f2eac2");
+    for (let x = 0; x < 18; x++) {
+      const h = Math.max(1, 6 - Math.abs(x - 9) * 6/9);
+      P(4+x, 7-h, 1, h, "#5a3f3a");
+    }
+    P(4,7,18,9,"#2e2a35"); P(4,7,18,1,"#453e4e");
+    P(6,9,4,3,"#f3c96a"); P(13,9,4,3,"#f3c96a"); P(6,13,4,3,"#1b1a26");
+    P(13,13,4,3,"#4a3628");
+    P(0,16,26,2,"#1a1a26"); P(0,16,26,1,"#242436");
+    P(1,12,2,4,"#3a5a3a"); P(23,13,2,3,"#3a5a3a");
+  }
+}
+
+// ───────────────────────────────────────────────────────── world geometry ──
+// Collision is a height-map: for any x, each floor contributes a walking
+// surface. Stairs are just surfaces 6px apart, so "hold ▶" walks him up.
+const gaps  = [];        // hole in floor i's slab (where the stairs arrive)
+const steps = [];        // {x0,x1,y,floor,k} every stair tread
+
+function buildWorld() {
+  for (let i = 0; i < FLOORS; i++) {
+    gaps[i] = i === 0 ? null
+            : goesRight(i-1) ? { x0:LAND_X0, x1:ROOM_W } : { x0:0, x1:ROOM_W-LAND_X0 };
+    if (i < TOP) {
+      const gy = groundY(i), right = goesRight(i);
+      for (let k = 0; k < STEPS; k++) {
+        const y = gy - RISE*(k+1);
+        const xr0 = k === STEPS-1 ? LAND_X0 : STAIR_X0 + RUN*k;
+        const xr1 = k === STEPS-1 ? ROOM_W  : xr0 + RUN;
+        steps.push(right ? { x0:xr0, x1:xr1, y, floor:i, k }
+                         : { x0:ROOM_W-xr1, x1:ROOM_W-xr0, y, floor:i, k });
+      }
+    }
+  }
+}
+buildWorld();
+
+function surfacesAt(x) {
+  const out = [];
+  for (let i = 0; i < FLOORS; i++) {
+    const h = gaps[i];
+    if (!h || x < h.x0 || x >= h.x1) out.push(groundY(i));
+  }
+  for (const s of steps) if (x >= s.x0 && x < s.x1) out.push(s.y);
+  return out;
+}
+
+// paintings — hung in the clear half of each room, out of the stairs' way
+const FR_W = ART_W + 2, FR_H = ART_H + 2;
+const PAINT_X = [100, 180, 100, 214, 100];
+const paintings = CONFIG.floors.map((f, i) => ({
+  scene:f.painting.scene, title:f.painting.title, caption:f.painting.caption,
+  floor:i, seen:false, x:PAINT_X[i], y:groundY(i) - 52,
+}));
+
+// Kitchen. He arrives from the stairs on the right, so the party is set
+// out to his left: counter, then the dog, then everyone, then the cake.
+const KY = groundY(TOP);
+const TABLE = { x:96, y:KY-22, w:72, h:4 };
+const CAKE_X = TABLE.x + 29, CAKE_Y = TABLE.y - 16;   // cake centre ≈ 134
+// everyone stands to the left of the table, facing him across it
+const family = CONFIG.family.map((m, i) => ({ ...m, x:[54,72,90][i], faceLeft:false, bob:i*1.1 }));
+const dogPos = { x:116, y:KY-14 };                    // at the table, obviously
+
+// ────────────────────────────────────────────────────────────── the guy ──
+const dad = { x:24, y:groundY(0)-P_H, vx:0, onGround:true, flip:false, anim:0, floor:0, vy:0 };
+
+function movePlayer(dt) {
+  const dir = (keys.right?1:0) - (keys.left?1:0);
+  dad.vx = dir * WALK;
+  if (dir) dad.flip = dir < 0;
+  dad.x = clamp(dad.x + dad.vx*dt, 2, ROOM_W - P_W - 2);
+  const cx = dad.x + P_W/2;
+
+  if (dad.onGround) {
+    const feet = dad.y + P_H;
+    let best = null;
+    for (const s of surfacesAt(cx))
+      if (s >= feet - STEP_UP && s <= feet + STEP_DOWN && (best === null || s < best)) best = s;
+    if (best !== null) { dad.y = best - P_H; dad.vy = 0; }
+    else dad.onGround = false;
+  }
+  if (!dad.onGround) {
+    dad.vy = Math.min(dad.vy + GRAV*dt, MAXFALL);
+    const ny = dad.y + dad.vy*dt;
+    if (dad.vy > 0) {
+      const f0 = dad.y + P_H, f1 = ny + P_H;
+      let land = null;
+      for (const s of surfacesAt(cx))
+        if (s >= f0 - 0.6 && s <= f1 && (land === null || s < land)) land = s;
+      if (land !== null) { dad.y = land - P_H; dad.vy = 0; dad.onGround = true; }
+      else dad.y = ny;
+    } else dad.y = ny;
+  }
+  if (dad.y > WORLD_H + 60) { dad.x = 24; dad.y = groundY(0) - P_H; dad.vy = 0; }
+
+  // floor() not round(), so the floor only changes when he actually arrives
+  const f = clamp(Math.floor((WORLD_H - (dad.y + P_H) + 1) / FLOOR_H), 0, TOP);
+  if (f !== dad.floor) {
+    dad.floor = f;
+    banner.text = f === TOP ? CONFIG.kitchenName : CONFIG.floors[f].name;
+    banner.t = 3.2;
+    if (f > visited) { visited = f; sfx.arrive(); }
+  }
+  if (dad.onGround && dir) {
+    dad.anim += dt * 7.5;
+    stepTimer -= dt;
+    if (stepTimer <= 0) { stepTimer = 0.26; sfx.step(); }
+  } else if (!dir) { dad.anim = 0; stepTimer = 0; }
+}
+
+// ────────────────────────────────────────────────────────── game state ──
+let visited = 0, stepTimer = 0;
+const lightsOn = [0,0,0,0,0,0];
+const banner = { text:"", t:0 };
+const confetti = [];
+const state = { mode:"title", t:0, candles:false, surpriseT:0, partyT:0, fade:0,
+                open:null, openT:0, camLockX:null };
+const cam = { x:0, y:WORLD_H - 280 };
+
+function nearPainting() {
+  if (!dad.onGround) return null;
+  for (const p of paintings)
+    if (p.floor === dad.floor && Math.abs((dad.x + P_W/2) - (p.x + FR_W/2)) < 16) return p;
+  return null;
+}
+const nearCake = () => dad.floor === TOP && dad.onGround &&
+                       Math.abs((dad.x + P_W/2) - (CAKE_X + 9)) < 28;
+
+// ───────────────────────────────────────────────────────────────── input ──
+const keys = { left:false, right:false };
+addEventListener("keydown", e => {
+  if (["ArrowLeft","ArrowRight","ArrowUp"," ","a","d","w"].includes(e.key)) e.preventDefault();
+  if (e.repeat) return;
+  if (e.key === "ArrowLeft"  || e.key === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+  if (e.key === "ArrowUp" || e.key === " " || e.key === "w") action();
+  if (state.mode === "title") start();
+});
+addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft"  || e.key === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+});
+function bindBtn(id, key) {
+  const el = document.getElementById(id);
+  const down = e => { e.preventDefault(); el.classList.add("on"); if (key) keys[key] = true; else action(); };
+  const up   = e => { e.preventDefault(); el.classList.remove("on"); if (key) keys[key] = false; };
+  el.addEventListener("pointerdown", down);
+  ["pointerup","pointercancel","pointerleave"].forEach(t => el.addEventListener(t, up));
+}
+bindBtn("bl","left"); bindBtn("br","right"); bindBtn("ba", null);
+cv.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  if (state.mode === "title") start();
+  else if (state.open) closePainting();
+  else if (state.mode === "party" && state.partyT > 3.2) showMessage();
+});
+const muteEl = document.getElementById("mute");
+muteEl.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  audio.muted = !audio.muted;
+  muteEl.textContent = audio.muted ? "✕" : "♪";
+  if (audio.gain) audio.gain.gain.value = audio.muted ? 0 : 0.5;
+});
+
+// ───────────────────────────────────────────────────────────────── audio ──
+const audio = { ctx:null, gain:null, muted:!CONFIG.music, next:0, step:0 };
+function initAudio() {
+  if (audio.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audio.ctx = new AC();
+  audio.gain = audio.ctx.createGain();
+  audio.gain.gain.value = audio.muted ? 0 : 0.5;
+  audio.gain.connect(audio.ctx.destination);
+  if (CONFIG.music) { audio.next = audio.ctx.currentTime + 0.2; setInterval(schedule, 90); }
+}
+function note(freq, when, dur, vol, type) {
+  if (!audio.ctx) return;
+  const o = audio.ctx.createOscillator(), g = audio.ctx.createGain();
+  o.type = type || "square"; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(audio.gain);
+  o.start(when); o.stop(when + dur + 0.03);
+}
+const N = { C4:261.6,D4:293.7,E4:329.6,G4:392,A4:440,B4:493.9,C5:523.3,D5:587.3,E5:659.3,G5:784,C6:1046.5 };
+const LOOP = [N.C4,N.E4,N.G4,N.E4,N.A4,N.G4,N.E4,N.D4];
+function schedule() {
+  if (!audio.ctx || state.mode === "party" || state.mode === "message") return;
+  const t = audio.ctx.currentTime;
+  while (audio.next < t + 0.4) {
+    const i = audio.step % LOOP.length;
+    note(LOOP[i], audio.next, 0.45, 0.045, "triangle");
+    if (visited >= 2 && i % 2 === 0) note(LOOP[i]*2, audio.next, 0.3, 0.02, "square");
+    if (visited >= 4) note(LOOP[i]/2, audio.next, 0.5, 0.03, "sine");
+    audio.next += 0.34; audio.step++;
+  }
+}
+const sfx = {
+  step()  { if (audio.ctx) note(90 + Math.random()*22, audio.ctx.currentTime, 0.05, 0.03, "square"); },
+  jump()  { if (audio.ctx) { const t = audio.ctx.currentTime; note(330,t,0.09,0.06); note(520,t+0.05,0.09,0.05); } },
+  chime() { if (audio.ctx) { const t = audio.ctx.currentTime; [N.E5,N.G5,N.C6].forEach((f,i)=>note(f,t+i*0.075,0.3,0.07,"triangle")); } },
+  arrive(){ if (audio.ctx) { const t = audio.ctx.currentTime; note(N.G4,t,0.16,0.05,"triangle"); note(N.C5,t+0.1,0.24,0.05,"triangle"); } },
+  pop()   { if (audio.ctx) note(180 + Math.random()*400, audio.ctx.currentTime, 0.1, 0.05, "square"); },
+};
+const HB_SONG = [
+  [N.D4,.5],[N.D4,.25],[N.E4,.75],[N.D4,.75],[N.G4,.75],[N.A4,1.4],
+  [N.D4,.5],[N.D4,.25],[N.E4,.75],[N.D4,.75],[N.A4,.75],[N.G4,1.4],
+  [N.D4,.5],[N.D4,.25],[N.D5,.75],[N.B4,.75],[N.G4,.75],[N.A4,.75],[N.E4,1.4],
+  [N.C5,.5],[N.C5,.25],[N.B4,.75],[N.G4,.75],[N.A4,.75],[N.G4,1.8],
+];
+function playHappyBirthday() {
+  if (!audio.ctx) return;
+  let t = audio.ctx.currentTime + 0.35;
+  for (const [f, len] of HB_SONG) {
+    note(f, t, len*0.39, 0.09, "triangle");
+    note(f/2, t, len*0.39, 0.045, "sine");
+    t += len * 0.42;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────── actions ──
+function action() {
+  if (state.mode === "title") { start(); return; }
+  if (state.open) { closePainting(); return; }
+  if (state.mode === "play") {
+    const p = nearPainting();
+    if (p) { openPainting(p); return; }
+    if (nearCake() && !state.candles) { blowOut(); return; }
+    if (dad.onGround) { dad.onGround = false; dad.vy = JUMP_V; sfx.jump(); }
+    return;
+  }
+  if (state.mode === "party" && state.partyT > 3.2) showMessage();
+}
+function start() {
+  if (state.mode !== "title") return;
+  initAudio();
+  state.mode = "play";
+  document.getElementById("pad").classList.remove("hide");
+  muteEl.classList.remove("hide");
+  banner.text = CONFIG.floors[0].name; banner.t = 3.2;
+}
+function openPainting(p) { state.open = p; state.openT = 0; p.seen = true; keys.left = keys.right = false; sfx.chime(); }
+function closePainting() { state.open = null; }
+function blowOut() {
+  state.candles = true; state.mode = "party"; state.partyT = 0;
+  keys.left = keys.right = false;
+  // frame the whole group, not just him — otherwise Mum ends up off-screen
+  const left = Math.min(...family.map(f => f.x));
+  state.camLockX = clamp((left + dad.x + 12)/2 - VIEW_W/2, 0, ROOM_W - VIEW_W);
+  document.getElementById("pad").classList.add("hide");
+  for (let i = 0; i < 160; i++) spawnConfetti();
+  playHappyBirthday();
+}
+function showMessage() { if (state.mode === "party") { state.mode = "message"; state.fade = 0; } }
+function spawnConfetti() {
+  const cols = [C.gold, C.pink, C.green, C.cream, "#7fb4ff", C.red];
+  confetti.push({
+    x: 10 + Math.random()*(ROOM_W-20), y: KY - 60 - Math.random()*36,
+    vx: (Math.random()-0.5)*26, vy: 8 + Math.random()*26,
+    col: cols[(Math.random()*cols.length)|0], s: Math.random() < 0.4 ? 2 : 1,
+    life: 3.5 + Math.random()*3, sway: Math.random()*6.28,
+  });
+}
+
+// ──────────────────────────────────────────────────────────── rendering ──
+function drawWindow(x, y, w, h, floor) {
+  px(x-2, y-2, w+4, h+4, "#3a2f3c");
+  px(x-1, y-1, w+2, h+2, "#5c4a52");
+  px(x, y, w, h, C.night);
+  for (let i = 0; i < 8; i++)
+    px(x + ((i*37 + floor*13) % (w-1)), y + ((i*23 + floor*7) % (h-1)), 1, 1, i%3 ? C.star : C.moon);
+  if (floor >= 3) px(x + w - 7, y + 3, 4, 4, C.moon);
+  px(x + (w>>1), y, 1, h, "#5c4a52");
+  px(x, y + (h>>1), w, 1, "#5c4a52");
+}
+function smallFrame(x, y, w, h) {
+  px(x, y, w, h, C.frame); px(x+1, y+1, w-2, h-2, "#d8cbb0");
+  px(x+2, y+2, w-4, h-4, "#7a94b5"); px(x+3, y+h-5, 2, 2, "#4a5a3a");
+}
+
+function drawRoom(i) {
+  const gy = groundY(i), ty = roomTop(i), h = FLOOR_H - SLAB;
+  px(0, ty, ROOM_W, h, WALL[i]);
+  for (let x = 0; x < ROOM_W; x += 16) px(x, ty, 1, h, WALL2[i]);
+  px(0, ty, ROOM_W, 1, "rgba(0,0,0,0.25)");
+  px(0, gy-5, ROOM_W, 5, WALL2[i]);            // skirting board
+  px(0, gy-5, ROOM_W, 1, "rgba(255,255,255,0.10)");
+  [drawGarage, drawLiving, drawStudy, drawMusic, drawLanding, drawKitchen][i](gy, ty);
+}
+
+function drawGarage(gy, ty) {
+  px(6, ty+10, 72, gy-ty-10, "#4e4a45");
+  for (let y = ty+12; y < gy; y += 5) {
+    px(8, y, 68, 3, "#6a655c");
+    px(8, y, 68, 1, "#7b756a");
+    px(8, y+3, 68, 1, "#3f3b36");
+  }
+  px(6, ty+10, 72, 2, "#847d70"); px(38, gy-15, 8, 2, "#3a3730");
+  px(6, ty+10, 2, gy-ty-10, "#5c584f"); px(76, ty+10, 2, gy-ty-10, "#3f3b36");
+  px(140, ty+8, 56, 24, "#5a4a3a");
+  for (let x = 144; x < 194; x += 6) for (let y = ty+12; y < ty+28; y += 6) px(x, y, 1, 1, "#3d3128");
+  px(148, ty+12, 2, 12, "#9aa0ad"); px(160, ty+12, 8, 3, "#9aa0ad"); px(178, ty+12, 2, 13, "#c0863a");
+  px(138, gy-20, 62, 4, C.woodDk); px(140, gy-16, 4, 16, C.woodDk); px(194, gy-16, 4, 16, C.woodDk);
+  px(150, gy-25, 12, 5, "#8a5a3a"); px(170, gy-24, 10, 4, "#9aa0ad");
+  px(84, gy-14, 20, 14, "#8a6a45"); px(84, gy-14, 20, 2, "#a07f55"); px(88, gy-26, 14, 12, "#7d5f3e");
+  px(60, ty, 1, 10, "#3a3a44"); px(58, ty+10, 5, 4, "#f5e9b8");
+  ctx.globalAlpha = 0.10; px(44, ty+10, 33, 44, C.warm); ctx.globalAlpha = 1;
+}
+function drawLiving(gy, ty) {
+  drawWindow(268, ty+14, 34, 26, 1);
+  px(140, gy-3, 130, 3, "#8a4a4a"); px(146, gy-3, 118, 1, "#a05a5a");
+  // sofa: back, seat, two armrests, cushions
+  px(150, gy-30, 62, 13, "#587d8b"); px(150, gy-30, 62, 1, "#6b94a3");
+  px(156, gy-17, 50, 11, "#4c6d7a"); px(156, gy-17, 50, 1, "#5f8493");
+  px(150, gy-24, 8, 18, "#3e5a66"); px(150, gy-24, 8, 1, "#527586");
+  px(204, gy-24, 8, 18, "#3e5a66"); px(204, gy-24, 8, 1, "#527586");
+  px(160, gy-27, 14, 9, "#e2b28a"); px(160, gy-27, 14, 1, "#f0c9a6");
+  px(184, gy-27, 14, 9, "#d08a9a"); px(184, gy-27, 14, 1, "#e5a6b3");
+  px(156, gy-6, 50, 6, "#3a545e"); px(154, gy-2, 4, 2, "#2a3d45"); px(204, gy-2, 4, 2, "#2a3d45");
+  px(240, gy-30, 42, 25, "#23262f"); px(243, gy-27, 36, 19, "#3d5a72");
+  px(246, gy-24, 11, 5, "#5f83a0"); px(256, gy-5, 10, 5, "#23262f"); px(250, gy-2, 22, 2, "#23262f");
+  px(226, gy-28, 2, 28, "#5a4a3a"); px(219, gy-38, 16, 10, "#e8c98a");
+  ctx.globalAlpha = 0.12; px(206, gy-40, 42, 40, C.warm); ctx.globalAlpha = 1;
+  px(140, gy-20, 14, 20, "#5a4a3a"); px(142, gy-24, 10, 4, "#6cbf8a");
+}
+function drawStudy(gy, ty) {
+  px(6, ty+6, 62, gy-ty-6, "#5a3f2a"); px(6, ty+6, 62, 2, "#6e4f36");
+  for (let s = 0; s < 3; s++) {
+    const sy = ty + 14 + s*17;
+    px(8, sy+13, 58, 2, "#452f1f");
+    let x = 10;
+    while (x < 62) {
+      const w = 2 + ((x*7 + s*3) % 3), hh = 8 + ((x*5 + s) % 5);
+      const cols = ["#b5514a","#4a7fb5","#c9a24a","#6cbf8a","#8a5aa5","#d0d0c0"];
+      px(x, sy+13-hh, w, hh, cols[(x+s) % cols.length]);
+      x += w + 1;
+    }
+  }
+  px(136, gy-22, 64, 4, C.wood); px(138, gy-18, 4, 18, C.woodDk); px(194, gy-18, 4, 18, C.woodDk);
+  px(156, gy-14, 16, 3, "#3f4657"); px(156, gy-28, 3, 14, "#3f4657");
+  px(158, gy-11, 3, 11, "#2f3547"); px(168, gy-11, 3, 11, "#2f3547");
+  px(184, gy-32, 2, 10, "#6a7280"); px(179, gy-38, 12, 6, "#e8c98a");
+  ctx.globalAlpha = 0.12; px(168, gy-38, 34, 24, C.warm); ctx.globalAlpha = 1;
+  px(142, gy-25, 12, 3, "#e6e2d4"); px(146, gy-28, 9, 3, "#cfd6e0");
+}
+function drawMusic(gy, ty) {
+  drawWindow(276, ty+12, 32, 26, 3);
+  // upright piano
+  px(140, gy-40, 66, 30, "#4a2f24"); px(140, gy-40, 66, 2, "#7a5344");
+  px(140, gy-38, 66, 1, "#33211b");
+  px(144, gy-34, 58, 11, "#31201a"); px(144, gy-34, 58, 1, "#231713");
+  px(150, gy-31, 46, 5, "#3d2820");
+  px(140, gy-12, 66, 5, "#3a251c"); px(140, gy-12, 66, 1, "#5c3c2c");
+  for (let x = 144; x < 200; x += 4) { px(x, gy-11, 3, 3, "#efe8db"); px(x+2, gy-11, 1, 2, "#20191c"); }
+  px(138, gy-7, 4, 7, "#31201a"); px(204, gy-7, 4, 7, "#31201a");
+  // stool
+  px(210, gy-14, 18, 3, "#5a3d26"); px(212, gy-11, 3, 11, "#4a3120"); px(223, gy-11, 3, 11, "#4a3120");
+  // guitar on a stand
+  px(256, gy-30, 2, 22, "#6a5a4a"); px(250, gy-8, 14, 2, "#6a5a4a");
+  px(252, gy-26, 10, 12, "#a5643c"); px(255, gy-23, 4, 4, "#4a3120");
+  px(256, gy-38, 2, 12, "#7a5636"); px(255, gy-40, 4, 3, "#3a2f26");
+  ctx.globalAlpha = 0.10; px(132, gy-46, 90, 46, C.warm); ctx.globalAlpha = 1;
+}
+function drawLanding(gy, ty) {
+  // stairs take x 200-320 on this floor, so everything lives to the left
+  px(8, ty+8, 30, gy-ty-8, "#6a4a30"); px(11, ty+11, 24, gy-ty-14, "#7d5a3a"); px(32, gy-24, 2, 2, C.gold);
+  drawWindow(146, ty+10, 32, 28, 4);
+  px(52, gy-16, 24, 3, C.wood); px(54, gy-13, 3, 13, C.woodDk); px(71, gy-13, 3, 13, C.woodDk);
+  px(58, gy-24, 10, 8, "#a5643c");
+  px(56, gy-32, 3, 9, C.green); px(61, gy-36, 3, 13, "#7fce9a"); px(66, gy-31, 3, 8, C.green);
+  smallFrame(140, gy-30, 14, 12); smallFrame(160, gy-24, 12, 10);
+  px(44, gy-4, 26, 4, "#6a4a30");
+}
+function drawKitchen(gy, ty) {
+  ctx.globalAlpha = 0.10; px(0, ty, ROOM_W, gy-ty, C.warm); ctx.globalAlpha = 1;
+  // counter run on the right, with a tiled backsplash above it
+  for (let x = 240; x < 288; x += 8)
+    for (let y = gy-42; y < gy-26; y += 8)
+      px(x, y, 8, 8, (x/8 + y/8) % 2 ? "#b8ad98" : "#c8bda8");
+  px(240, gy-42, 48, 1, "#d6cbb6");
+  px(236, gy-26, 56, 5, "#cfc4ae"); px(238, gy-21, 52, 21, "#7a6249");
+  px(262, gy-21, 1, 21, "#63503c");
+  px(248, gy-30, 12, 4, "#9aa0ad"); px(274, gy-32, 10, 6, C.red);
+  px(28, gy-48, 26, 48, "#dfe3ea"); px(28, gy-28, 26, 1, "#b9bfc9");
+  px(50, gy-42, 2, 8, "#9aa0ad"); px(50, gy-22, 2, 8, "#9aa0ad");
+  px(33, gy-44, 7, 6, C.gold); px(42, gy-43, 6, 5, C.pink);
+  drawWindow(246, ty+8, 34, 18, 5);
+  px(TABLE.x, TABLE.y, TABLE.w, TABLE.h, "#a57a4e"); px(TABLE.x, TABLE.y, TABLE.w, 1, "#c29565");
+  px(TABLE.x+5, TABLE.y+4, 4, 18, C.woodDk); px(TABLE.x+TABLE.w-9, TABLE.y+4, 4, 18, C.woodDk);
+  px(TABLE.x+8, TABLE.y-4, 8, 4, "#cfd6e0"); px(TABLE.x+56, TABLE.y-3, 7, 3, "#cfd6e0");
+  const by = ty + 5;
+  px(4, by, ROOM_W-8, 1, "#8a7a5a");
+  const flags = [C.pink, C.gold, C.green, "#7fb4ff", C.red];
+  for (let i = 0, x = 8; x < ROOM_W-12; x += 14, i++) {
+    const col = flags[i % flags.length];
+    for (let r = 0; r < 6; r++) px(x+r, by+1+r, 12-r*2, 1, col);
+  }
+  [70, 150, 236].forEach(x => {
+    px(x, by+1, 1, 9, "#4a4230"); px(x-4, by+10, 9, 5, "#f7e6a8");
+    ctx.globalAlpha = 0.12; px(x-24, by+10, 49, 50, C.warm); ctx.globalAlpha = 1;
+  });
+}
+
+const RAIL_H = 17;           // handrail height above the tread nosing
+function drawStairs() {
+  // treads, and the diagonal stringer carrying them
+  for (const s of steps) {
+    const w = s.x1 - s.x0, thick = RISE + 9;
+    px(s.x0, s.y, w, thick, C.stair);
+    px(s.x0, s.y, w, 1, C.stairHi);
+    px(s.x0, s.y + 1, w, 1, "#8a6340");
+    px(s.x0, s.y + thick - 1, w, 1, C.stairLo);
+    const nose = goesRight(s.floor) ? s.x1 - 1 : s.x0;
+    px(nose, s.y, 1, thick, "#5b3d24");
+  }
+  // banister: rail segment per step, plus a riser link so it reads continuous
+  for (const s of steps) {
+    if (s.k === STEPS - 1) continue;
+    const w = s.x1 - s.x0, ry = s.y - RAIL_H;
+    px(s.x0, ry, w, 2, "#a3764c");
+    px(s.x0, ry + 2, w, 1, "#6b4a2e");
+    const up = goesRight(s.floor) ? s.x1 - 1 : s.x0;
+    px(up, ry - RISE, 1, RISE + 2, "#a3764c");           // link to the next segment
+    if (s.k % 2 === 0) px(goesRight(s.floor) ? s.x0 + 1 : s.x1 - 2, ry + 2, 1, RAIL_H - 2, C.rail);
+  }
+  // newel post at the bottom of each flight
+  for (const s of steps) {
+    if (s.k !== 0) continue;
+    const x = goesRight(s.floor) ? s.x0 : s.x1 - 2;
+    px(x, s.y - RAIL_H - 1, 2, RAIL_H + 8, "#5b3d24");
+    px(x, s.y - RAIL_H - 3, 2, 2, "#a3764c");
+  }
+}
+function drawSlabs() {
+  for (let i = 0; i < FLOORS; i++) {
+    const gy = groundY(i), h = gaps[i];
+    const segs = !h ? [[0, ROOM_W]] : h.x0 === 0 ? [[h.x1, ROOM_W]] : [[0, h.x0]];
+    for (const [a, b] of segs) {
+      px(a, gy, b-a, SLAB, C.slab);
+      px(a, gy, b-a, 1, FLOORCOL[i]);
+      px(a, gy+1, b-a, 1, C.slabHi);
+      px(a, gy+SLAB-2, b-a, 2, C.slabLo);
+      for (let x = a - (a % 14); x < b; x += 14) if (x >= a) px(x, gy+2, 1, SLAB-4, "#54402f");
+    }
+  }
+  const ry = roomTop(TOP) - ROOF;
+  for (let x = 0; x < ROOM_W; x++) {
+    const h = Math.max(3, ROOF - Math.abs(x - ROOM_W/2) * (ROOF-5) / (ROOM_W/2));
+    px(x, ry+ROOF-h, 1, h, "#6a4a44");
+    px(x, ry+ROOF-h, 1, 1, "#87605a");
+    if (x % 9 === 0) px(x, ry+ROOF-h+2, 1, h-2, "#5c403b");
+  }
+  px(238, ry+1, 15, 22, "#4a3a3e"); px(238, ry+1, 15, 2, "#5e4a4e");
+}
+
+function drawPaintings(t) {
+  for (const p of paintings) {
+    px(p.x-1, p.y-1, FR_W+2, FR_H+2, "rgba(0,0,0,0.35)");
+    px(p.x, p.y, FR_W, FR_H, C.frame);
+    px(p.x, p.y, FR_W, 1, C.frameHi); px(p.x, p.y, 1, FR_H, C.frameHi);
+    scene(p.scene, p.x+1, p.y+1, 1);
+    px(p.x + (FR_W>>1) - 3, p.y - 5, 7, 2, "#c9a24a");
+    px(p.x + (FR_W>>1), p.y - 8, 1, 3, "#7a6a4a");
+    ctx.globalAlpha = 0.09 + (p.seen ? 0.04 : 0.06 * Math.abs(Math.sin(t*2)));
+    px(p.x - 4, p.y - 5, FR_W + 8, FR_H + 10, C.warm);
+    ctx.globalAlpha = 1;
+  }
+}
+
+const pal = m => ({ h:m.hair, s:m.skin, e:"#241f2c", m:"#a35c58", S:m.shirt, P:m.pants, b:m.shoe });
+function drawPerson(sp, x, y, m, flip) {
+  drawSprite(sp, x, y, pal(m), flip);
+  if (m.glasses) {
+    px(x+3, y+4, 3, 2, "#2e2a33"); px(x+7, y+4, 3, 2, "#2e2a33");
+    px(x+6, y+5, 1, 1, "#2e2a33");
+  }
+}
+function drawFamily(t) {
+  for (const m of family) {
+    const party = state.mode === "party" || state.mode === "message";
+    const hop = party ? -(Math.max(0, Math.sin(t*6 + m.bob) * 4) | 0)
+                      : (Math.sin(t*1.6 + m.bob) > 0.94 ? -1 : 0);
+    const sp = m.long ? (party ? SPR.f_cheer : SPR.f_idle) : (party ? SPR.m_cheer : SPR.m_idle);
+    drawPerson(sp, m.x, KY - 18 + hop, m, m.faceLeft);
+  }
+  if (CONFIG.dog) drawSprite(Math.sin(t*7) > 0 ? DOG_WAG : DOG_IDLE, dogPos.x, dogPos.y, DOG_PAL, false);
+}
+function drawCake(t) {
+  drawSprite(CAKE, CAKE_X, CAKE_Y, CAKE_PAL, false);
+  if (!state.candles) { for (const c of CANDLE_X) px(CAKE_X+c+1, CAKE_Y+2, 1, 1, "#5a4a3a"); return; }
+  for (let i = 0; i < CANDLE_X.length; i++) {
+    const c = CANDLE_X[i], f = Math.sin(t*9 + i*2) > 0 ? 0 : 1;
+    px(CAKE_X+c+1, CAKE_Y+1-f, 1, 2+f, C.warm);
+    px(CAKE_X+c+1, CAKE_Y-f, 1, 1, "#fff4b0");
+    ctx.globalAlpha = 0.13; px(CAKE_X+c-4, CAKE_Y-5, 10, 15, C.warm); ctx.globalAlpha = 1;
+  }
+}
+function drawDad(t) {
+  let sp = SPR.m_idle;
+  if (state.mode === "party" || state.mode === "message") sp = SPR.m_cheer;
+  else if (state.open) sp = SPR.m_look;
+  else if (!dad.onGround) sp = SPR.m_jump;
+  else if (dad.vx !== 0) sp = (dad.anim|0) % 2 ? SPR.m_w1 : SPR.m_w2;
+  let y = dad.y;
+  if (state.mode === "party") y -= Math.max(0, Math.sin(t*6)*4) | 0;
+  drawPerson(sp, dad.x - 2, y, CONFIG.dadLook, dad.flip);
+}
+function drawConfetti(dt) {
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const p = confetti[i];
+    p.life -= dt;
+    if (p.life <= 0) { confetti.splice(i,1); continue; }
+    p.sway += dt*4;
+    p.x += (p.vx + Math.sin(p.sway)*16) * dt;
+    p.y += p.vy * dt;
+    p.vy = Math.min(p.vy + 22*dt, 42);
+    if (p.y > KY - 1) { confetti.splice(i,1); continue; }
+    ctx.globalAlpha = Math.min(1, p.life);
+    px(p.x, p.y, p.s, p.s, p.col);
+    ctx.globalAlpha = 1;
+  }
+}
+const darkness = i => Math.max(0, [0.50,0.42,0.34,0.26,0.16,0][i] - lightsOn[i] * 0.18);
+
+// ────────────────────────────────────────────────────────────── overlays ──
+function panel(x, y, w, h) {
+  ctx.globalAlpha = 0.94; px(x, y, w, h, C.panel); ctx.globalAlpha = 1;
+  px(x, y, w, 1, C.panelHi); px(x, y+h-1, w, 1, C.panelHi);
+  px(x, y, 1, h, C.panelHi); px(x+w-1, y, 1, h, C.panelHi);
+}
+function drawOpenPainting(dt) {
+  state.openT = Math.min(1, state.openT + dt*5);
+  const a = state.openT;
+  ctx.globalAlpha = 0.86 * a; px(0, 0, VIEW_W, VIEW_H, "#080a14"); ctx.globalAlpha = 1;
+  const s = 4, w = ART_W*s, h = ART_H*s;
+  const x = Math.round((VIEW_W - w)/2), y = Math.round(VIEW_H*0.30 - h/2);
+  ctx.globalAlpha = a;
+  px(x-5, y-5, w+10, h+10, C.frame);
+  px(x-5, y-5, w+10, 2, C.frameHi); px(x-5, y-5, 2, h+10, C.frameHi);
+  px(x-2, y-2, w+4, h+4, "#241d18");
+  scene(state.open.scene, x, y, s);
+  let ty = y + h + 16;
+  drawText(state.open.title, VIEW_W/2, ty, C.gold, "center");
+  ty += 15;
+  for (const l of wrap(state.open.caption, VIEW_W - 18)) { drawText(l, VIEW_W/2, ty, C.ink, "center"); ty += LINE_H; }
+  if (a >= 1 && Math.sin(state.t*3) > -0.3) drawText("▲ close", VIEW_W/2, VIEW_H - 34, "#8d93b5", "center");
+  ctx.globalAlpha = 1;
+}
+function drawHud(dt) {
+  if (banner.t > 0) {
+    banner.t -= dt;
+    ctx.globalAlpha = clamp(banner.t > 2.6 ? (3.2-banner.t)/0.6 : Math.min(1, banner.t/0.7), 0, 1);
+    drawText(banner.text, VIEW_W/2, 12, C.gold, "center");
+    ctx.globalAlpha = 1;
+  }
+  if (state.mode === "play" && !state.open) {
+    const p = nearPainting();
+    const prompt = p ? (p.seen ? "▲ look again" : "▲ look")
+                     : (nearCake() && !state.candles ? "▲ light the candles" : null);
+    document.getElementById("ba").classList.toggle("hint", !!prompt);
+    if (prompt && Math.sin(state.t*4) > -0.3) drawText(prompt, VIEW_W/2, VIEW_H - 26, C.cream, "center");
+  }
+  if (state.surpriseT > 0) {
+    state.surpriseT -= dt;
+    const w = textW(CONFIG.surprise) + 10;
+    panel(VIEW_W/2 - w/2, 26, w, 14);
+    drawText(CONFIG.surprise, VIEW_W/2, 29, C.gold, "center");
+  }
+}
+function drawTitle(t) {
+  px(0, 0, VIEW_W, VIEW_H, C.night);
+  for (let i = 0; i < 40; i++) {
+    ctx.globalAlpha = 0.35 + 0.4*Math.abs(Math.sin(t*1.2 + i));
+    px((i*71) % VIEW_W, (i*53) % (VIEW_H*0.55), 1, 1, C.star);
+    ctx.globalAlpha = 1;
+  }
+  const hw = 78, hh = 96, hx = (VIEW_W-hw)>>1, hy = (VIEW_H>>1) - 22;
+  for (let x = 0; x < hw; x++) {
+    const h = Math.max(2, 20 - Math.abs(x - hw/2)*16/(hw/2));
+    px(hx+x, hy-h, 1, h, "#6a4a44");
+  }
+  px(hx, hy, hw, hh, "#2e2a35"); px(hx, hy, hw, 1, "#453e4e");
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) px(hx+11+c*22, hy+14+r*22, 12, 12, "#1b1a26");
+  ctx.globalAlpha = 0.8 + 0.2*Math.sin(t*2);
+  px(hx+11, hy+14, 56, 12, "#f3c96a");
+  ctx.globalAlpha = 1;
+  px(hx+18, hy+17, 3, 9, "#8a6a2e"); px(hx+26, hy+19, 3, 7, "#8a6a2e");
+  px(hx+34, hy+16, 3, 10, "#8a6a2e"); px(hx+42, hy+20, 3, 6, "#8a6a2e");
+  ctx.globalAlpha = 0.12; px(hx-6, hy+8, hw+12, 28, C.warm); ctx.globalAlpha = 1;
+  px(hx+33, hy+hh-18, 12, 18, "#4a3628");
+  drawPerson(SPR.m_idle, hx+17, hy+hh-18, CONFIG.dadLook, false);
+  px(hx-26, hy+hh, hw+52, 3, "#1a1a26");
+  drawText("HAPPY BIRTHDAY", VIEW_W/2, 32, C.gold, "center");
+  drawText(CONFIG.dadName.toUpperCase(), VIEW_W/2, 44, C.cream, "center");
+  drawText("get to the top floor", VIEW_W/2, 62, "#8d93b5", "center");
+  if (Math.sin(t*3) > -0.4) drawText("tap to begin", VIEW_W/2, VIEW_H-40, C.ink, "center");
+}
+function drawMessage(dt) {
+  state.fade = Math.min(1, state.fade + dt*0.8);
+  ctx.globalAlpha = 0.88*state.fade; px(0, 0, VIEW_W, VIEW_H, "#0a0c18"); ctx.globalAlpha = 1;
+  if (state.fade < 0.25) return;
+  ctx.globalAlpha = clamp((state.fade-0.25)/0.6, 0, 1);
+  const lines = [];
+  for (const l of CONFIG.finaleLines) l === "" ? lines.push("") : lines.push(...wrap(l, VIEW_W-20));
+  let y = Math.round((VIEW_H - (42 + lines.length*LINE_H))/2) - 12;
+  drawText(CONFIG.finaleTitle, VIEW_W/2, y, C.gold, "center"); y += 20;
+  for (const l of lines) { drawText(l, VIEW_W/2, y, C.ink, "center"); y += LINE_H; }
+  y += 10;
+  drawText(CONFIG.signature, VIEW_W/2, y, C.pink, "center");
+  drawSprite(CAKE, (VIEW_W-18)/2, y+16, CAKE_PAL, false);
+  for (let i = 0; i < CANDLE_X.length; i++) {
+    const f = Math.sin(state.t*9 + i*2) > 0 ? 0 : 1;
+    px((VIEW_W-18)/2 + CANDLE_X[i] + 1, y+17-f, 1, 2+f, C.warm);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ────────────────────────────────────────────── full-house design render ──
+function drawHousePreview() {
+  px(0, 0, VIEW_W, VIEW_H, C.night);
+  for (let i = 0; i < FLOORS; i++) drawRoom(i);
+  drawStairs();
+  drawPaintings(1.2);
+  drawCake(0);
+  drawFamily(0.2);
+  drawPerson(SPR.m_idle, dad.x-2, dad.y, CONFIG.dadLook, false);
+  drawSlabs();
+  for (let i = 0; i < FLOORS; i++) {
+    const d = [0.30,0.24,0.19,0.14,0.08,0][i];
+    if (!d) continue;
+    ctx.globalAlpha = d; px(0, roomTop(i), ROOM_W, FLOOR_H, "#0a0c1c"); ctx.globalAlpha = 1;
+  }
+  for (let i = 0; i < FLOORS; i++) {
+    const label = (i === TOP ? CONFIG.kitchenName : CONFIG.floors[i].name).toUpperCase();
+    const right = goesRight(i);                       // stairs on the right → label left
+    const x = right ? 6 : ROOM_W - 6, y = roomTop(i) + 3;
+    const w = textW(label) + 6;
+    ctx.globalAlpha = 0.55;
+    px(right ? 3 : ROOM_W - w - 3, y - 2, w, 13, "#0c0e1c");
+    ctx.globalAlpha = 1;
+    drawText(label, x, y, "#8f9ad0", right ? "left" : "right");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────── the loop ──
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last)/1000);
+  last = now;
+  state.t += dt;
+
+  if (PREVIEW) { drawHousePreview(); requestAnimationFrame(frame); return; }
+  if (state.mode === "title") { drawTitle(state.t); requestAnimationFrame(frame); return; }
+
+  if (state.mode === "play" && !state.open) {
+    movePlayer(dt);
+    if (dad.floor === TOP && state.surpriseT === 0 && !state.candles) {
+      state.surpriseT = 2.6; sfx.pop();
+      for (const f of family) f.faceLeft = dad.x < f.x;
+    }
+  } else if (state.mode === "party") {
+    state.partyT += dt;
+    if (state.partyT < 2.2 && Math.random() < 0.35) spawnConfetti();
+    if (state.partyT > 7) showMessage();
+  }
+  for (let i = 0; i < FLOORS; i++)
+    lightsOn[i] = lerp(lightsOn[i], i <= visited ? 1 : 0, 1 - Math.pow(0.001, dt));
+
+  const tx = state.camLockX !== null ? state.camLockX
+           : clamp(dad.x + P_W/2 - VIEW_W/2, 0, ROOM_W - VIEW_W);
+  const ty = clamp(dad.y + P_H/2 - VIEW_H*0.56, 0, Math.max(0, WORLD_BOT - VIEW_H));
+  const k = 1 - Math.pow(0.0015, dt);
+  cam.x = lerp(cam.x, tx, k); cam.y = lerp(cam.y, ty, k);
+
+  px(0, 0, VIEW_W, VIEW_H, C.night);
+  ctx.save();
+  ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
+  for (let i = 0; i < FLOORS; i++) drawRoom(i);
+  drawStairs();
+  drawPaintings(state.t);
+  drawCake(state.t);
+  drawFamily(state.t);
+  drawDad(state.t);
+  drawSlabs();                       // drawn last so he ducks under the ceiling
+  drawConfetti(dt);
+  for (let i = 0; i < FLOORS; i++) {
+    const d = darkness(i);
+    if (d <= 0.001) continue;
+    const y0 = roomTop(i) - (i === TOP ? ROOF : 0);
+    const hh = FLOOR_H + (i === TOP ? ROOF : 0);
+    ctx.globalAlpha = d; px(-4, y0, ROOM_W+8, hh, "#0a0c1c"); ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  const warmth = clamp(visited/TOP, 0, 1);
+  if (warmth > 0.01) { ctx.globalAlpha = 0.05*warmth; px(0,0,VIEW_W,VIEW_H,C.warm); ctx.globalAlpha = 1; }
+
+  drawHud(dt);
+  if (state.open) drawOpenPainting(dt);
+  if (state.mode === "message") drawMessage(dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
