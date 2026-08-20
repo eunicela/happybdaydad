@@ -1344,7 +1344,7 @@ function drawHud(dt) {
                  : p ? "▲ look at painting"
                  : nearArch() ? "▲ go up"
                  : nearTV() ? "▲ turn on the tv"
-                 : nearDesk() ? "▲ pretend to work"
+                 : nearDesk() ? "▲ work"
                  : (nearCake() && !state.candles) ? "▲ light the candles"
                  : nearDog() ? "▲ pet " + CONFIG.dog.name : null;
     document.getElementById("ba").classList.toggle("hint", !!prompt);
