@@ -76,6 +76,26 @@
     max-width:80vw; line-height:1.5;
   }
   #tvclose { margin-top:8px; color:#9aa0c8; font-size:13px; }
+  /* the framed photo close-up */
+  #ph {
+    position:fixed; inset:0; z-index:14;
+    background:rgba(6,6,14,0.93);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:opacity .25s;
+  }
+  #ph.hide { opacity:0; pointer-events:none; }
+  #phframe {
+    background:#f0ebdd; padding:8px;
+    border:3px solid #b8ab8f;
+    box-shadow:0 0 0 3px #8e8577 inset, 0 8px 30px rgba(0,0,0,0.6);
+  }
+  #phcv { display:block; image-rendering:pixelated; background:#111; }
+  #phtitle { margin-top:16px; color:#ffd36e; font-size:16px; text-align:center; }
+  #phcap {
+    margin-top:8px; color:#f4f0e4; font-size:14px; text-align:center;
+    max-width:82vw; line-height:1.5;
+  }
+  #phclose { margin-top:10px; color:#9aa0c8; font-size:13px; }
 </style>
 </head>
 <body>
@@ -84,6 +104,12 @@
 <div id="pad" class="hide">
   <div id="dpad"><div class="btn" id="bl">◀</div><div class="btn" id="br">▶</div></div>
   <div class="btn" id="ba">▲</div>
+</div>
+<div id="ph" class="hide">
+  <div id="phframe"><canvas id="phcv"></canvas></div>
+  <div id="phtitle"></div>
+  <div id="phcap"></div>
+  <div id="phclose">▲ close</div>
 </div>
 <div id="tv" class="hide">
   <div id="tvset">
@@ -119,25 +145,25 @@ const CONFIG = {
     { name:"The Hallway", paintings:[
       { scene:"home", x:64, title:"The House",
         caption:"You picked it. You fixed it. You kept it standing." },
-      { scene:"film", x:100, title:"The Film Shoot",
+      { scene:"film", photo:"photos/film.jpg", x:100, title:"The Film Shoot",
         caption:"One roll of film. Two naturals." } ] },
     { name:"The Living Room", paintings:[
-      { scene:"dog", x:118, title:"Keifer at Sunset",
+      { scene:"dog", photo:"photos/keifer.jpg", x:118, title:"Keifer at Sunset",
         caption:"Best seat in the house, and he knows it." } ] },
     { name:"The Study", paintings:[
-      { scene:"penang", x:131, title:"Penang",
+      { scene:"penang", photo:"photos/penang.jpg", x:131, title:"Penang",
         caption:"The family trip to Penang. You ordered for the whole table, and you were right every time." },
-      { scene:"durian", x:163, title:"Durian in Sri Lanka",
+      { scene:"durian", photo:"photos/durian.jpg", x:163, title:"Durian in Sri Lanka",
         caption:"Roadside durian in Sri Lanka. Some of us enjoyed it more than others." } ] },
     { name:"The Music Room", paintings:[
-      { scene:"london", x:176, title:"London, Canada",
+      { scene:"london", photo:"photos/london.jpg", x:176, title:"London, Canada",
         caption:"Dropping Oliver off in London. The car was quieter the whole way home." },
-      { scene:"cookoff", x:232, title:"The Cookoff",
+      { scene:"cookoff", photo:"photos/cookoff.jpg", x:232, title:"The Cookoff",
         caption:"South Africa. The aprons said LAI FAMILY, and the captain was obvious." } ] },
     { name:"The Landing", paintings:[
-      { scene:"kinabalu", x:112, title:"Mount Kinabalu",
+      { scene:"kinabalu", photo:"photos/kinabalu.jpg", x:112, title:"Mount Kinabalu",
         caption:"Sunrise at the summit. You got us all the way up." },
-      { scene:"graduation", x:216, title:"Graduation Day",
+      { scene:"graduation", photo:"photos/graduation.jpg", x:216, title:"Graduation Day",
         caption:"You clapped the loudest. You always do." } ] },
   ],
 
@@ -408,7 +434,8 @@ addEventListener("resize", resize);
 addEventListener("orientationchange", () => setTimeout(resize, 120));
 resize();
 
-function px(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x|0, y|0, w|0, h|0); }
+let dctx = ctx;                       // where px() draws; swapped for offscreen work
+function px(x, y, w, h, col) { dctx.fillStyle = col; dctx.fillRect(x|0, y|0, w|0, h|0); }
 function drawSprite(sp, x, y, pal, flip) {
   x = Math.round(x); y = Math.round(y);
   const w = sp[0].length;
@@ -614,7 +641,7 @@ const paintings = [];
 CONFIG.floors.forEach((f, i) => {
   const list = f.paintings || (f.painting ? [f.painting] : []);
   for (const p of list)
-    paintings.push({ scene:p.scene, title:p.title, caption:p.caption,
+    paintings.push({ scene:p.scene, title:p.title, caption:p.caption, photo:p.photo,
                      floor:i, seen:false, x:p.x, y:groundY(i) - 52 });
 });
 
@@ -829,8 +856,78 @@ function finishClimb() {
     for (const f of family) f.faceLeft = dad.x < f.x;
   }
 }
-function openPainting(p) { state.open = p; state.openT = 0; p.seen = true; keys.left = keys.right = false; sfx.chime(); }
-function closePainting() { state.open = null; }
+// ── the framed close-up: pixel art that develops into the real photo ──
+const ph = {
+  el: document.getElementById("ph"), cv: document.getElementById("phcv"),
+  ctx: document.getElementById("phcv").getContext("2d"),
+  token: 0,
+};
+function phFit(w, h) {
+  const scale = Math.min(innerWidth * 0.84 / w, innerHeight * 0.5 / h);
+  return { w: Math.round(w * scale), h: Math.round(h * scale) };
+}
+function phDrawScene(id) {
+  const s = 4;
+  ph.cv.width = ART_W * s; ph.cv.height = ART_H * s;
+  const fit = phFit(ART_W, ART_H);
+  ph.cv.style.width = fit.w + "px"; ph.cv.style.height = fit.h + "px";
+  dctx = ph.ctx;
+  px(0, 0, ART_W * s, ART_H * s, "#111");
+  scene(id, 0, 0, s);
+  dctx = ctx;
+}
+function openPainting(p) {
+  state.open = p; p.seen = true;
+  keys.left = keys.right = false;
+  sfx.chime();
+  const token = ++ph.token;
+  document.getElementById("phtitle").textContent = p.title || "";
+  document.getElementById("phcap").textContent = p.caption || "";
+  phDrawScene(p.scene);
+  ph.el.classList.remove("hide");
+  if (!p.photo) return;
+  const img = new Image();
+  img.onload = () => {
+    if (token !== ph.token) return;
+    setTimeout(() => { if (token === ph.token) developPhoto(img, token); }, 420);
+  };
+  img.src = p.photo;
+}
+function developPhoto(img, token) {
+  const cap = Math.min(img.naturalWidth, 1300);
+  const W = cap, H = Math.round(img.naturalHeight * cap / img.naturalWidth);
+  ph.cv.width = W; ph.cv.height = H;
+  const fit = phFit(W, H);
+  ph.cv.style.width = fit.w + "px"; ph.cv.style.height = fit.h + "px";
+  const tmp = document.createElement("canvas"), tctx = tmp.getContext("2d");
+  const t0 = performance.now(), DUR = 1150;
+  function step(now) {
+    if (token !== ph.token) return;
+    const t = clamp((now - t0) / DUR, 0, 1);
+    const ease = 1 - (1 - t) * (1 - t);
+    const block = Math.max(1, Math.round(lerp(56, 1, ease)));
+    if (block <= 1) {
+      ph.ctx.imageSmoothingEnabled = true;
+      ph.ctx.drawImage(img, 0, 0, W, H);
+      sfx.chime();
+      return;
+    }
+    tmp.width = Math.max(1, Math.ceil(W / block));
+    tmp.height = Math.max(1, Math.ceil(H / block));
+    tctx.imageSmoothingEnabled = true;
+    tctx.drawImage(img, 0, 0, tmp.width, tmp.height);
+    ph.ctx.imageSmoothingEnabled = false;
+    ph.ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, 0, 0, W, H);
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function closePainting() {
+  ph.token++;                       // cancels any develop in flight
+  state.open = null;
+  ph.el.classList.add("hide");
+}
+ph.el.addEventListener("pointerdown", e => { e.preventDefault(); closePainting(); });
 function openTV() {
   state.tvOpen = true;
   keys.left = keys.right = false;
@@ -1189,23 +1286,6 @@ function panel(x, y, w, h) {
   px(x, y, w, 1, C.panelHi); px(x, y+h-1, w, 1, C.panelHi);
   px(x, y, 1, h, C.panelHi); px(x+w-1, y, 1, h, C.panelHi);
 }
-function drawOpenPainting(dt) {
-  state.openT = Math.min(1, state.openT + dt*5);
-  const a = state.openT;
-  ctx.globalAlpha = 0.87 * a; px(0, 0, VIEW_W, VIEW_H, "#080a14"); ctx.globalAlpha = 1;
-  const s = 4, w = ART_W*s, h = ART_H*s;
-  const x = Math.round((VIEW_W - w)/2), y = Math.round(VIEW_H*0.21 - h/2);
-  ctx.globalAlpha = a;
-  px(x-6, y-6, w+12, h+12, C.frame);
-  px(x-3, y-3, w+6, h+6, C.frameIn);
-  scene(state.open.scene, x, y, s);
-  let ty = y + h + 18;
-  drawText(state.open.title, VIEW_W/2, ty, C.gold, "center");
-  ty += 15;
-  for (const l of wrap(state.open.caption, VIEW_W - 18)) { drawText(l, VIEW_W/2, ty, C.ink, "center"); ty += LINE_H; }
-  if (a >= 1 && Math.sin(state.t*3) > -0.3) drawText("▲ close", VIEW_W/2, ty + 12, "#9aa0c8", "center");
-  ctx.globalAlpha = 1;
-}
 function drawHud(dt) {
   if (banner.t > 0) {
     banner.t -= dt;
@@ -1385,7 +1465,6 @@ function frame(now) {
   if (warmth > 0.01) { ctx.globalAlpha = 0.05*warmth; px(0,0,VIEW_W,VIEW_H,C.warm); ctx.globalAlpha = 1; }
 
   drawHud(dt);
-  if (state.open) drawOpenPainting(dt);
   if (state.climb) {                                  // black out the stair climb
     const h = state.climb.t / CLIMB_T;
     ctx.globalAlpha = 1 - Math.abs(h - 0.5) * 2;
